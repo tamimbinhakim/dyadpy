@@ -47,9 +47,9 @@
   "lint-staged": {
     "*.{ts,tsx,js,jsx,mjs,cjs}": [
       "oxlint --fix",
-      "oxfmt"
+      "oxfmt --ignore-path .oxfmtignore"
     ],
-    "*.py": [
+    "packages/tythe/**/*.py": [
       "uv run --directory packages/tythe ruff check --fix",
       "uv run --directory packages/tythe ruff format"
     ],

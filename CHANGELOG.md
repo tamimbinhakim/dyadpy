@@ -8,6 +8,8 @@ Commits.
 - [`packages/tythe/CHANGELOG.md`](./packages/tythe/CHANGELOG.md)
 - [`packages/tythe-ts/CHANGELOG.md`](./packages/tythe-ts/CHANGELOG.md)
 - [`packages/tythe-react/CHANGELOG.md`](./packages/tythe-react/CHANGELOG.md)
+- [`packages/tythe-svelte/CHANGELOG.md`](./packages/tythe-svelte/CHANGELOG.md)
+- [`packages/tythe-solid/CHANGELOG.md`](./packages/tythe-solid/CHANGELOG.md)
 
 This file is for repo-wide notes: governance changes, license changes,
 toolchain migrations, and other things that don't belong to a single package.

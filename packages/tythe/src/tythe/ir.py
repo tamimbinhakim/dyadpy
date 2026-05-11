@@ -24,6 +24,8 @@ from typing import Any
 
 import msgspec
 
+from tythe._pydantic import is_pydantic_model
+from tythe._pydantic import json_schema as pydantic_json_schema
 from tythe.app import App, Route
 from tythe.params import ParamLocation
 from tythe.runtime import HandlerPlan, build_plan
@@ -106,29 +108,40 @@ def build_ir(app: App) -> AppIR:
             slots.append(("raises", r_idx, exc))
             types_for_extraction.append(_synth_exc_type(exc))
 
-    # msgspec.json.schema_components chokes on _Skip / non-schema-able types;
-    # feed it a filtered list and stitch results back by position.
-    real_indices: list[int] = []
-    real_types: list[Any] = []
+    # msgspec.json.schema_components chokes on Pydantic models and _Skip
+    # placeholders. Split the type list into:
+    #   - msgspec-handled types (Struct/dataclass/scalar)
+    #   - Pydantic models (handled by ``model_json_schema``)
+    # and stitch the merged schemas back to their original slot index.
+    msgspec_indices: list[int] = []
+    msgspec_types: list[Any] = []
+    pydantic_indices: list[int] = []
+    pydantic_types: list[Any] = []
     for i, t in enumerate(types_for_extraction):
         if t is _Skip:
             continue
-        real_indices.append(i)
-        real_types.append(t)
-
-    schemas: list[dict[str, Any]] = []
-    components: dict[str, dict[str, Any]] = {}
-    if real_types:
-        real_schemas, real_components = msgspec.json.schema_components(
-            real_types,
-            ref_template=_REF_TEMPLATE,
-        )
-        schemas = list(real_schemas)
-        components = dict(real_components)
+        if is_pydantic_model(t):
+            pydantic_indices.append(i)
+            pydantic_types.append(t)
+        else:
+            msgspec_indices.append(i)
+            msgspec_types.append(t)
 
     schemas_by_index: dict[int, dict[str, Any]] = {}
-    for i, s in zip(real_indices, schemas, strict=True):
-        schemas_by_index[i] = s
+    components: dict[str, dict[str, Any]] = {}
+    if msgspec_types:
+        real_schemas, real_components = msgspec.json.schema_components(
+            msgspec_types,
+            ref_template=_REF_TEMPLATE,
+        )
+        for i, s in zip(msgspec_indices, real_schemas, strict=True):
+            schemas_by_index[i] = s
+        components.update(real_components)
+
+    for i, t in zip(pydantic_indices, pydantic_types, strict=True):
+        schema, pyd_components = _split_pydantic_schema(pydantic_json_schema(t))
+        schemas_by_index[i] = schema
+        components.update(pyd_components)
 
     routes_ir: list[RouteIR] = []
     for r_idx, (route, plan) in enumerate(plans):
@@ -140,7 +153,7 @@ def build_ir(app: App) -> AppIR:
         for slot_idx, (kind, slot_r_idx, payload) in enumerate(slots):
             if slot_r_idx != r_idx:
                 continue
-            schema: dict[str, Any] | None = schemas_by_index.get(slot_idx)
+            slot_schema: dict[str, Any] | None = schemas_by_index.get(slot_idx)
             if kind == "param":
                 p = payload
                 assert p.location is not None
@@ -148,7 +161,7 @@ def build_ir(app: App) -> AppIR:
                     ParamIR(
                         name=p.name,
                         alias=p.alias,
-                        schema=schema if schema is not None else _file_schema(),
+                        schema=slot_schema if slot_schema is not None else _file_schema(),
                         location=p.location,
                         required=p.required,
                         embed=p.embed,
@@ -156,12 +169,12 @@ def build_ir(app: App) -> AppIR:
                 )
             elif kind == "response":
                 if plan.streams:
-                    event_schema = schema
+                    event_schema = slot_schema
                 else:
-                    response_schema = schema
+                    response_schema = slot_schema
             elif kind == "raises":
                 raises_ir.append(
-                    ErrorIR(name=payload.__name__, schema=schema or _exc_schema(payload)),
+                    ErrorIR(name=payload.__name__, schema=slot_schema or _exc_schema(payload)),
                 )
 
         routes_ir.append(
@@ -182,6 +195,25 @@ def build_ir(app: App) -> AppIR:
 
 def _file_schema() -> dict[str, Any]:
     return {"type": "string", "format": "binary"}
+
+
+def _split_pydantic_schema(
+    schema: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
+    """Split a Pydantic schema's ``$defs`` out into a components dict.
+
+    Pydantic emits ``#/$defs/Name`` refs that the codegen already understands —
+    we just need the defs hoisted into the shared components bucket alongside
+    msgspec's, and the schema rewritten to be a bare ``$ref`` so it slots into
+    the same slot-by-index machinery msgspec types use.
+    """
+    defs = schema.pop("$defs", {}) or {}
+    components: dict[str, dict[str, Any]] = dict(defs)
+    title = schema.get("title")
+    if title and schema.get("type") == "object":
+        components[str(title)] = schema
+        return {"$ref": f"#/$defs/{title}"}, components
+    return schema, components
 
 
 def _synth_exc_type(exc: type[Exception]) -> Any:

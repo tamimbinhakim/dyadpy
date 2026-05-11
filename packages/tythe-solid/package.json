@@ -1,15 +1,14 @@
 {
-  "name": "@tythe/react",
+  "name": "@tythe/solid",
   "version": "0.1.0",
-  "description": "React hooks (useQuery, useMutation, useSubscription) on top of TanStack Query for Tythe-generated clients.",
+  "description": "SolidJS resource bindings (query, mutation, subscription) for Tythe-generated clients.",
   "keywords": [
     "python",
-    "react",
-    "react-query",
     "rpc",
+    "solid",
+    "solidjs",
     "sse",
     "streaming",
-    "tanstack-query",
     "tythe"
   ],
   "homepage": "https://github.com/tamimbinhakim/tythe#readme",
@@ -21,7 +20,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/tamimbinhakim/tythe.git",
-    "directory": "packages/tythe-react"
+    "directory": "packages/tythe-solid"
   },
   "files": [
     "dist",
@@ -55,23 +54,18 @@
     "clean": "rimraf dist .turbo"
   },
   "devDependencies": {
-    "@tanstack/react-query": "5.62.7",
-    "@testing-library/react": "16.1.0",
     "@types/node": "25.6.2",
-    "@types/react": "19.0.1",
-    "@types/react-dom": "19.0.2",
     "@tythe/ts": "workspace:*",
     "happy-dom": "15.11.7",
-    "react": "19.0.0",
-    "react-dom": "19.0.0",
+    "solid-js": "1.9.3",
     "tsup": "8.5.1",
     "vite": "8.0.12",
+    "vite-plugin-solid": "2.11.0",
     "vitest": "4.1.5"
   },
   "peerDependencies": {
-    "@tanstack/react-query": ">=5.0.0 <6",
     "@tythe/ts": "workspace:*",
-    "react": ">=18.0.0"
+    "solid-js": ">=1.8.0 <2"
   },
   "engines": {
     "node": ">=20"

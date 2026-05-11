@@ -25,6 +25,8 @@ import msgspec
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response, StreamingResponse
 
+from tythe._pydantic import is_pydantic_model, to_jsonable
+from tythe._pydantic import validate as pydantic_validate
 from tythe.context import Context, Dependency
 from tythe.errors import exception_to_payload, get_declared_raises
 from tythe.params import Body, Marker, ParamLocation, location_of
@@ -157,8 +159,8 @@ def _resolve_param(param: inspect.Parameter, annotation: Any, path_params: set[s
 
 
 def _is_structural(t: Any) -> bool:
-    """``True`` for Struct / dataclass / TypedDict — anything that's a whole-object shape."""
-    return _is_struct_class(t) or _has_struct_attrs(t)
+    """``True`` for Struct / dataclass / TypedDict / Pydantic BaseModel."""
+    return _is_struct_class(t) or _has_struct_attrs(t) or is_pydantic_model(t)
 
 
 def _is_struct_class(t: Any) -> bool:
@@ -206,10 +208,10 @@ async def _read_value(
                 if not spec.required:
                     return spec.default
                 raise _missing(spec)
-            return msgspec.convert(body_cache[spec.alias], type=spec.py_type, strict=False)
+            return _convert_body(body_cache[spec.alias], spec.py_type)
         if not body_cache and not spec.required:
             return spec.default
-        return msgspec.convert(body_cache, type=spec.py_type, strict=False)
+        return _convert_body(body_cache, spec.py_type)
     if spec.location == "file":
         assert form_cache is not None
         value = form_cache.get(spec.alias)
@@ -219,6 +221,13 @@ async def _read_value(
             raise _missing(spec)
         return value
     raise AssertionError(f"unreachable location: {spec.location!r}")
+
+
+def _convert_body(value: Any, py_type: Any) -> Any:
+    """Pydantic BaseModel → ``model_validate``; everything else → msgspec.convert."""
+    if is_pydantic_model(py_type):
+        return pydantic_validate(py_type, value)
+    return msgspec.convert(value, type=py_type, strict=False)
 
 
 def _optional_or_convert(raw: str | None, spec: ParamSpec) -> Any:
@@ -251,7 +260,9 @@ _json_encoder = msgspec.json.Encoder()
 
 
 def _encode_json(value: Any) -> bytes:
-    return _json_encoder.encode(value)
+    # Pydantic BaseModel instances need ``model_dump`` before msgspec sees them;
+    # everything else (Struct, dataclass, scalar, dict, list) passes straight through.
+    return _json_encoder.encode(to_jsonable(value))
 
 
 @dataclass(slots=True)

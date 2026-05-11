@@ -22,34 +22,47 @@ The bet: get the core loop right. Everything else is post-MVP.
 - [x] Multipart file uploads via a generic `File` parameter marker
 - [x] Cookie / header / query / body via `Annotated`
 - [x] DI container compatible with FastAPI's `Depends()`
-- [x] Examples for Next.js and Vite/React
+- [x] Examples for Next.js, Vite/React, and SvelteKit
 - [x] One short hero demo: typed streaming end-to-end in **<50 lines**
-- [ ] SvelteKit example
 
 ## v0.2 — Framework bindings + Pydantic
 
 Once the core is solid, meet the JS ecosystem where it lives.
 
-- [ ] Pydantic plugin (`tythe[pydantic]`) — first-class peer to msgspec
+- [x] Pydantic plugin (`tythe[pydantic]`) — first-class peer to msgspec
 - Framework-specific binding packages (separate from `@tythe/ts`,
   which stays framework-agnostic):
   - [x] `@tythe/react` — `useQuery`, `useMutation`, `useSubscription`
         on top of TanStack Query
-  - [ ] `@tythe/svelte` — store-based bindings
-  - [ ] `@tythe/solid` — `createResource`-style bindings
-- [ ] `Task[T]` long-running job primitive backed by a pluggable queue
-      (in-memory, Redis, SQS) — a _general_ background-work abstraction,
-      not LLM-specific
+  - [x] `@tythe/svelte` — store-based bindings
+  - [x] `@tythe/solid` — `createResource`-style bindings
+- [x] `Task[T]` long-running job primitive backed by a pluggable queue
+      — `InMemoryBackend` ships in core; Redis / SQS adapters are
+      separate packages by design
 
 ## v0.3+ — Polyglot, auth, observability
 
-- [ ] WebSocket bidirectional (`bidi[Send, Recv]`)
-- [ ] Auth recipes (NextAuth, Clerk, custom JWT) as plugins
-- [ ] Optional OpenAPI export for users who also need to serve external
-      clients
-- [ ] Polyglot clients (Swift, Kotlin) via the same IR
-- [ ] Tracing/observability (OpenTelemetry-compatible)
-- [ ] `tythe deploy` thin wrapper for Fly / Render / Modal
+- [x] WebSocket bidirectional (`bidi[Send, Recv]`) — handler-side channel
+      primitive; codegen surface for browser clients is a follow-up
+- [x] Auth recipes (NextAuth, Clerk, custom JWT) — see [`docs/auth.md`](./docs/auth.md)
+- [x] Optional OpenAPI 3.1 export via `tythe openapi` for users who also
+      need to serve external clients
+- [x] Polyglot clients (Swift, Kotlin) via the same IR — minimal renderers,
+      `tythe swift` / `tythe kotlin` CLI commands
+- [x] Tracing/observability — OpenTelemetry ASGI middleware via
+      `tythe.otel.instrument(app)`
+- [x] `tythe deploy` thin wrapper for Fly / Render / Modal
+
+## Beyond v0.3
+
+These exist as scaffolds but want deeper iteration before they earn a
+checkmark:
+
+- Polyglot codegens currently emit struct/data-class shapes and method
+  stubs — full request/response wiring per language is a follow-up.
+- `bidi[Send, Recv]` handlers need codegen on the client side (TS first)
+  and an example end-to-end demo.
+- Redis / SQS `TaskBackend` adapters as separate packages.
 
 ## Won't do (probably)
 

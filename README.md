@@ -164,12 +164,13 @@ Full walkthrough in [docs/getting-started.md](./docs/getting-started.md).
 
 ## Packages
 
-| Package                                        | What it is                                                                                                                                                | Status |
-| ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| [`tythe`](./packages/tythe) (PyPI)             | The Python framework, the CLI, the codegen.                                                                                                               | v0.1   |
-| [`@tythe/ts`](./packages/tythe-ts) (npm)       | The tiny (~3 KB) framework-agnostic TS runtime your generated `client.ts` imports. Works with any frontend — Next.js, Vite, SvelteKit, Astro, plain HTML. | v0.1   |
-| [`@tythe/react`](./packages/tythe-react) (npm) | React-specific hooks (`useQuery`, `useSubscription`, `useMutation`) on top of TanStack Query.                                                             | v0.1   |
-| `@tythe/svelte` (npm)                          | Svelte store bindings.                                                                                                                                    | v0.2   |
+| Package                                          | What it is                                                                                                                                                | Status |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| [`tythe`](./packages/tythe) (PyPI)               | The Python framework, the CLI, the codegen.                                                                                                               | v0.1   |
+| [`@tythe/ts`](./packages/tythe-ts) (npm)         | The tiny (~3 KB) framework-agnostic TS runtime your generated `client.ts` imports. Works with any frontend — Next.js, Vite, SvelteKit, Astro, plain HTML. | v0.1   |
+| [`@tythe/react`](./packages/tythe-react) (npm)   | React-specific hooks (`useQuery`, `useSubscription`, `useMutation`) on top of TanStack Query.                                                             | v0.1   |
+| [`@tythe/svelte`](./packages/tythe-svelte) (npm) | Svelte 5 store bindings (`query`, `mutation`, `subscription`).                                                                                            | v0.1   |
+| [`@tythe/solid`](./packages/tythe-solid) (npm)   | SolidJS resource bindings (`query`, `mutation`, `subscription`).                                                                                          | v0.1   |
 
 ## What about AI / LLMs?
 

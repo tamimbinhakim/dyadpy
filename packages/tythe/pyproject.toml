@@ -48,6 +48,11 @@ dependencies = [
   "python-multipart>=0.0.18",
 ]
 
+[project.optional-dependencies]
+pydantic = ["pydantic>=2.10"]
+otel = ["opentelemetry-api>=1.27", "opentelemetry-sdk>=1.27"]
+all = ["tythe[pydantic,otel]"]
+
 [project.scripts]
 tythe = "tythe.cli:main"
 
@@ -67,6 +72,9 @@ dev = [
   "ruff>=0.13",
   "mypy>=1.18",
   "types-setuptools",
+  "pydantic>=2.10",
+  "opentelemetry-api>=1.27",
+  "opentelemetry-sdk>=1.27",
 ]
 
 [tool.hatch.build.targets.wheel]

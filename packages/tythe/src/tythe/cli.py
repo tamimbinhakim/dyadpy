@@ -31,6 +31,8 @@ from tythe import __version__
 from tythe.app import App
 from tythe.codegen import write as write_client
 from tythe.ir import build_ir
+from tythe.openapi import write as write_openapi
+from tythe.polyglot import write_kotlin, write_swift
 
 app_cli = typer.Typer(
     name="tythe",
@@ -175,6 +177,78 @@ def build(
     routes = _regenerate(target, out)
     rprint(f"[bold green]wrote[/bold green] {out} ({routes} routes)")
     uvicorn.run(target, host=host, port=port)
+
+
+@app_cli.command()
+def openapi(
+    target: Annotated[str, typer.Argument(help="module:attr of your tythe.App")],
+    out: Annotated[Path, typer.Option(help="Where to write the OpenAPI doc")] = Path(
+        "openapi.json",
+    ),
+    title: Annotated[str, typer.Option()] = "Tythe API",
+    api_version: Annotated[str, typer.Option("--api-version")] = "0.0.0",
+) -> None:
+    """Emit OpenAPI 3.1 alongside the TS client — for non-Tythe consumers."""
+    app = _load_app(target)
+    ir = build_ir(app)
+    write_openapi(ir, out, title=title, version=api_version)
+    rprint(f"[bold green]wrote[/bold green] {out} ({len(ir.routes)} routes)")
+
+
+@app_cli.command()
+def swift(
+    target: Annotated[str, typer.Argument(help="module:attr of your tythe.App")],
+    out: Annotated[Path, typer.Option(help="Where to write the Swift client")] = Path(
+        "Tythe.swift",
+    ),
+) -> None:
+    """Generate a Swift client off the same IR. Minimal renderer."""
+    app = _load_app(target)
+    ir = build_ir(app)
+    write_swift(ir, out)
+    rprint(f"[bold green]wrote[/bold green] {out} ({len(ir.routes)} routes)")
+
+
+@app_cli.command()
+def kotlin(
+    target: Annotated[str, typer.Argument(help="module:attr of your tythe.App")],
+    out: Annotated[Path, typer.Option(help="Where to write the Kotlin client")] = Path(
+        "Tythe.kt",
+    ),
+    package: Annotated[str, typer.Option()] = "com.tythe.generated",
+) -> None:
+    """Generate a Kotlin client off the same IR. Minimal renderer."""
+    app = _load_app(target)
+    ir = build_ir(app)
+    write_kotlin(ir, out, package=package)
+    rprint(f"[bold green]wrote[/bold green] {out} ({len(ir.routes)} routes)")
+
+
+@app_cli.command()
+def deploy(
+    provider: Annotated[
+        str,
+        typer.Argument(help="Target provider: fly | render | modal"),
+    ],
+) -> None:
+    """Thin wrapper around provider-specific deploy CLIs.
+
+    We don't reinvent deployment — we just hand off to the provider's tool
+    with sensible defaults for a Tythe ASGI app. Provider-specific config
+    (``fly.toml`` / ``render.yaml`` / ``modal.toml``) is left to you.
+    """
+    if provider == "fly":
+        rprint("[dim]exec[/dim] flyctl deploy")
+        rc = subprocess.call(["flyctl", "deploy"])
+    elif provider == "render":
+        rprint("[yellow]render[/yellow] deploys are git-push driven — push to your linked branch.")
+        rc = 0
+    elif provider == "modal":
+        rprint("[dim]exec[/dim] modal deploy")
+        rc = subprocess.call(["modal", "deploy"])
+    else:
+        raise typer.BadParameter(f"unknown provider: {provider!r} (fly | render | modal)")
+    raise typer.Exit(code=rc)
 
 
 def _py_only(_change: object, path: str) -> bool:
