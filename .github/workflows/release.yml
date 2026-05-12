@@ -4,21 +4,26 @@ on:
   push:
     branches: [main]
 
+# Default is read-only. Release-please needs write, publishers need OIDC.
 permissions:
-  contents: write
-  pull-requests: write
-  id-token: write
+  contents: read
 
 jobs:
   release-please:
     name: release-please
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
     outputs:
       releases_created: ${{ steps.release.outputs.releases_created }}
       tythe_released: ${{ steps.release.outputs['packages/tythe--release_created'] }}
       ts_released: ${{ steps.release.outputs['packages/tythe-ts--release_created'] }}
+      react_released: ${{ steps.release.outputs['packages/tythe-react--release_created'] }}
+      svelte_released: ${{ steps.release.outputs['packages/tythe-svelte--release_created'] }}
+      solid_released: ${{ steps.release.outputs['packages/tythe-solid--release_created'] }}
     steps:
-      - uses: googleapis/release-please-action@v5
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         id: release
         with:
           config-file: release-please-config.json
@@ -29,31 +34,36 @@ jobs:
     needs: release-please
     if: needs.release-please.outputs.tythe_released == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # OIDC for PyPI Trusted Publishing
     environment:
       name: pypi
       url: https://pypi.org/p/tythe
     steps:
-      - uses: actions/checkout@v6
-      - uses: astral-sh/setup-uv@v7
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.0
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.1.1
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.0.0
         with:
           python-version: "3.13"
       - working-directory: packages/tythe
-        run: |
-          uv build
-      - uses: pypa/gh-action-pypi-publish@release/v1
+        run: uv build
+      - uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # release/v1
         with:
           packages-dir: packages/tythe/dist
 
-  publish-npm:
+  publish-npm-ts:
     name: Publish @tythe/ts to npm
     needs: release-please
     if: needs.release-please.outputs.ts_released == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # npm provenance
     steps:
-      - uses: actions/checkout@v6
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.0
+      - uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.0.0
         with:
           node-version: 22
           cache: pnpm
@@ -61,6 +71,86 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @tythe/ts build
       - working-directory: packages/tythe-ts
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  publish-npm-react:
+    name: Publish @tythe/react to npm
+    needs: [release-please, publish-npm-ts]
+    if: |
+      always() &&
+      needs.release-please.outputs.react_released == 'true' &&
+      (needs.publish-npm-ts.result == 'success' || needs.publish-npm-ts.result == 'skipped')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.0
+      - uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.0.0
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+      - run: pnpm install --frozen-lockfile
+      # @tythe/react depends on @tythe/ts via workspace:* — build both so the
+      # dist symlink is real before publish picks up the file list.
+      - run: pnpm --filter @tythe/ts --filter @tythe/react build
+      - working-directory: packages/tythe-react
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  publish-npm-svelte:
+    name: Publish @tythe/svelte to npm
+    needs: [release-please, publish-npm-ts]
+    if: |
+      always() &&
+      needs.release-please.outputs.svelte_released == 'true' &&
+      (needs.publish-npm-ts.result == 'success' || needs.publish-npm-ts.result == 'skipped')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.0
+      - uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.0.0
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @tythe/ts --filter @tythe/svelte build
+      - working-directory: packages/tythe-svelte
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  publish-npm-solid:
+    name: Publish @tythe/solid to npm
+    needs: [release-please, publish-npm-ts]
+    if: |
+      always() &&
+      needs.release-please.outputs.solid_released == 'true' &&
+      (needs.publish-npm-ts.result == 'success' || needs.publish-npm-ts.result == 'skipped')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.0
+      - uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.0.0
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @tythe/ts --filter @tythe/solid build
+      - working-directory: packages/tythe-solid
         run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
