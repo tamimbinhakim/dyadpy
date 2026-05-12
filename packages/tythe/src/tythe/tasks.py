@@ -1,20 +1,13 @@
 """Long-running jobs via a pluggable queue.
 
-The interface is intentionally minimal: submit a coroutine returning ``T``,
-get a ``Task[T]`` handle back, poll or stream progress over a Tythe route.
+Submit a coroutine returning ``T``, get a task-id back, poll
+``backend.status(id)`` or iterate ``backend.stream(id)`` for live progress.
 The backend is swappable — ``InMemoryBackend`` ships in core; Redis / SQS
 adapters belong in their own packages so the core stays dependency-light.
 
-Design notes:
-
-- ``Task[T]`` is a *parameterized alias*, like ``stream[T]``: the codegen
-  reads the type parameter off the return annotation. There's no special
-  ``Task`` class on the wire — it's just a discriminated union of
-  ``{kind:"queued"|"running"|"succeeded"|"failed", ...}`` shaped events.
-- Backend implementations expose four primitives: ``enqueue``, ``status``,
-  ``stream``, ``cancel``. Anything that satisfies the Protocol qualifies.
-- A handler that returns ``Task[T]`` is usually paired with a streaming
-  endpoint for live updates and a unary endpoint for one-shot polling.
+Backend implementations expose four primitives: ``enqueue``, ``status``,
+``stream``, ``cancel``. Anything that satisfies the ``TaskBackend``
+Protocol qualifies.
 """
 
 from __future__ import annotations
@@ -139,15 +132,3 @@ class InMemoryBackend:
         if record is None or record.task is None:
             return
         record.task.cancel()
-
-
-# Default singleton used by the type alias ``Task[T]`` below. Apps that want
-# their own backend wire one through DI and pass it explicitly to ``enqueue``.
-default_backend: TaskBackend = InMemoryBackend()
-
-
-# `Task[T]` is the parameterized handle handlers return. It carries the
-# value type so the codegen can emit `Task<T>` on the TS side. The handle
-# itself is a state, not the value — clients poll/stream to get T out.
-Task = TaskState
-"""Annotate task-returning handlers with ``-> Task[T]``. Equivalent to ``TaskState[T]``."""

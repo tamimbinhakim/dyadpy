@@ -28,12 +28,10 @@ __all__ = [
     "Cookie",
     "File",
     "Header",
-    "Marker",
     "ParamLocation",
     "Path",
     "Query",
     "UploadFile",
-    "location_of",
 ]
 
 

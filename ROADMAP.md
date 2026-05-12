@@ -36,33 +36,23 @@ Once the core is solid, meet the JS ecosystem where it lives.
         on top of TanStack Query
   - [x] `@tythe/svelte` — store-based bindings
   - [x] `@tythe/solid` — `createResource`-style bindings
-- [x] `Task[T]` long-running job primitive backed by a pluggable queue
-      — `InMemoryBackend` ships in core; Redis / SQS adapters are
-      separate packages by design
+- [~] `Task[T]` long-running job queue — `TaskBackend` Protocol and
+  `InMemoryBackend` ship; runtime/codegen don't yet recognize a
+  `Task[T]` return annotation, and Redis / SQS adapters are
+  separate packages.
 
 ## v0.3+ — Polyglot, auth, observability
 
-- [x] WebSocket bidirectional (`bidi[Send, Recv]`) — handler-side channel
-      primitive; codegen surface for browser clients is a follow-up
+- [ ] WebSocket bidirectional (`bidi[Send, Recv]`) — not started.
 - [x] Auth recipes (NextAuth, Clerk, custom JWT) — see [`docs/auth.md`](./docs/auth.md)
 - [x] Optional OpenAPI 3.1 export via `tythe openapi` for users who also
       need to serve external clients
-- [x] Polyglot clients (Swift, Kotlin) via the same IR — minimal renderers,
-      `tythe swift` / `tythe kotlin` CLI commands
+- [~] Polyglot clients (Swift, Kotlin) via the same IR — `tythe swift`
+  and `tythe kotlin` CLI commands emit struct shapes + method stubs;
+  full request/response wiring is a follow-up.
 - [x] Tracing/observability — OpenTelemetry ASGI middleware via
       `tythe.otel.instrument(app)`
 - [x] `tythe deploy` thin wrapper for Fly / Render / Modal
-
-## Beyond v0.3
-
-These exist as scaffolds but want deeper iteration before they earn a
-checkmark:
-
-- Polyglot codegens currently emit struct/data-class shapes and method
-  stubs — full request/response wiring per language is a follow-up.
-- `bidi[Send, Recv]` handlers need codegen on the client side (TS first)
-  and an example end-to-end demo.
-- Redis / SQS `TaskBackend` adapters as separate packages.
 
 ## Won't do (probably)
 

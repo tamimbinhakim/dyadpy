@@ -1,3 +1,4 @@
+import { unwrapResult } from "@tythe/ts";
 import { createEffect, createResource, createSignal, onCleanup } from "solid-js";
 import type { Accessor, ResourceReturn } from "solid-js";
 
@@ -5,25 +6,6 @@ import type { ArgsOf, DataOf, ErrorOf, StreamItemOf, StreamKeys, UnaryKeys } fro
 
 type Unary = (args?: unknown, opts?: { signal?: AbortSignal }) => Promise<unknown>;
 type Stream = (args?: unknown, opts?: { signal?: AbortSignal }) => AsyncIterable<unknown>;
-interface Envelope {
-  ok: boolean;
-  data?: unknown;
-  error?: unknown;
-}
-
-function unwrap(value: unknown): unknown {
-  if (value === null || typeof value !== "object") {
-    return value;
-  }
-  const e = value as Envelope;
-  if (typeof e.ok !== "boolean" || (!("data" in e) && !("error" in e))) {
-    return value;
-  }
-  if (e.ok) {
-    return e.data;
-  }
-  throw e.error;
-}
 
 export type QueryResource<TData, TError> = ResourceReturn<TData> & {
   error: Accessor<TError | undefined>;
@@ -65,7 +47,7 @@ export function createTytheResources<TApi extends object>(api: TApi): TytheResou
     const resource = createResource<DataOf<TApi[K]>, ArgsOf<TApi[K]>>(args, async (a) => {
       const fn = api[method] as unknown as Unary;
       try {
-        const data = unwrap(await fn(a as unknown)) as DataOf<TApi[K]>;
+        const data = unwrapResult(await fn(a as unknown)) as DataOf<TApi[K]>;
         setError(() => undefined);
         return data;
       } catch (error) {
@@ -89,7 +71,7 @@ export function createTytheResources<TApi extends object>(api: TApi): TytheResou
       setError(() => undefined);
       try {
         const fn = api[method] as unknown as Unary;
-        const result = unwrap(await fn(args as unknown)) as DataOf<TApi[K]>;
+        const result = unwrapResult(await fn(args as unknown)) as DataOf<TApi[K]>;
         setData(() => result);
         return result;
       } catch (error) {

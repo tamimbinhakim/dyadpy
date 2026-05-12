@@ -33,6 +33,21 @@ export interface CallOptions {
 
 export type Result<T, E> = { ok: true; data: T } | { ok: false; error: E };
 
+/**
+ * Unwrap a Result envelope: returns `data` on success, throws `error` on failure.
+ * Plain (non-envelope) values pass through unchanged. Used by the framework
+ * binding packages so a typed error union lands on the consumer's `.error`
+ * slot rather than buried inside `.data`.
+ */
+type Envelope = { ok: boolean; data?: unknown; error?: unknown };
+export function unwrapResult(value: unknown): unknown {
+  if (value === null || typeof value !== "object") return value;
+  const e = value as Envelope;
+  if (typeof e.ok !== "boolean" || (!("data" in e) && !("error" in e))) return value;
+  if (e.ok) return e.data;
+  throw e.error;
+}
+
 // `OkOf` / `ErrOf` are the distributive workers; `Ok` / `Err` apply `Awaited`
 // first so users can pass a `Promise<Result<…>>` directly (which is what the
 // generated `Routes.X.Return` is for unary routes). Splitting in two stages

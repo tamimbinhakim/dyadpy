@@ -14,6 +14,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, cast
 
+from tythe._idents import to_camel as _to_camel
 from tythe.ir import AppIR, RouteIR
 
 # ---------- Swift ----------
@@ -150,10 +151,3 @@ def _kotlin_type(schema: Any) -> str:
 def _kotlin_ident(name: str) -> str:
     cleaned = "".join(c if c.isalnum() or c == "_" else "_" for c in name)
     return cleaned or "_"
-
-
-def _to_camel(name: str) -> str:
-    if "_" not in name:
-        return name
-    head, *rest = name.split("_")
-    return head + "".join(p[:1].upper() + p[1:] for p in rest if p)
