@@ -12,20 +12,23 @@ export function ResultNarrowing() {
 
   async function go(issueId: number) {
     const result = await api.getIssue({ issueId }, { headers: AUTH });
+
     if (result.ok) {
       // result.data: Issue
       setOut(`✓ ${result.data.title}`);
       return;
     }
     switch (result.error.kind) {
-      case "IssueNotFound":
+      case "IssueNotFound": {
         // result.error narrowed to { kind: "IssueNotFound"; issueId: number }
         setOut(`× IssueNotFound — id=${result.error.issueId}`);
         return;
-      case "Forbidden":
+      }
+      case "Forbidden": {
         // result.error narrowed to { kind: "Forbidden"; reason: string }
         setOut(`× Forbidden — ${result.error.reason}`);
         return;
+      }
     }
   }
 

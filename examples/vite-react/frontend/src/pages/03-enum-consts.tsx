@@ -17,7 +17,7 @@ export function EnumConsts() {
         data: {
           title: "Demo issue",
           body: "value-object const used for `priority`",
-          priority: IssuePriority.Urgent, //                                ← rename-safe
+          priority: IssuePriority.Medium, //                                ← rename-safe
           labelNames: ["bug", "frontend"],
         },
       },
