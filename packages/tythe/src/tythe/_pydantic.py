@@ -46,9 +46,14 @@ def validate(t: type, value: Any) -> Any:
     return t.model_validate(value)  # type: ignore[attr-defined]
 
 
-def json_schema(t: type) -> dict[str, Any]:
-    """Return the Pydantic-emitted JSON schema for a model."""
-    return t.model_json_schema()  # type: ignore[attr-defined,no-any-return]
+def json_schema(t: type, *, mode: str = "validation") -> dict[str, Any]:
+    """Return the Pydantic-emitted JSON schema for a model.
+
+    ``mode`` is ``"validation"`` (default — for request bodies; required
+    fields are required, computed fields excluded) or ``"serialization"``
+    (for response types; computed fields included, defaults applied).
+    """
+    return t.model_json_schema(mode=mode)  # type: ignore[attr-defined,no-any-return]
 
 
 def to_jsonable(value: Any) -> Any:

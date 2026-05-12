@@ -344,7 +344,7 @@ def _walk_path(value: Any, path: str) -> Any:
         if token.startswith("[") and token.endswith("]"):
             idx = int(token[1:-1])
             if isinstance(cursor, list):
-                items = cast("list[Any]", cursor)
+                items = cast("list[Any]", cursor)  # type: ignore[redundant-cast]
                 if 0 <= idx < len(items):
                     cursor = items[idx]
                     continue

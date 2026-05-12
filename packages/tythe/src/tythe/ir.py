@@ -121,12 +121,19 @@ def build_ir(app: App) -> AppIR:
     msgspec_types: list[Any] = []
     pydantic_indices: list[int] = []
     pydantic_types: list[Any] = []
+    pydantic_modes: list[str] = []  # "validation" for params, "serialization" for responses
     for i, t in enumerate(types_for_extraction):
         if t is _Skip:
             continue
         if is_pydantic_model(t):
             pydantic_indices.append(i)
             pydantic_types.append(t)
+            # Response/event/raises slots want serialization mode so that
+            # ``@computed_field`` properties land in the generated TS type.
+            kind = slots[i][0]
+            pydantic_modes.append(
+                "serialization" if kind in ("response", "raises") else "validation",
+            )
         else:
             msgspec_indices.append(i)
             msgspec_types.append(t)
@@ -142,8 +149,8 @@ def build_ir(app: App) -> AppIR:
             schemas_by_index[i] = s
         components.update(real_components)
 
-    for i, t in zip(pydantic_indices, pydantic_types, strict=True):
-        schema, pyd_components = _split_pydantic_schema(pydantic_json_schema(t))
+    for i, t, mode in zip(pydantic_indices, pydantic_types, pydantic_modes, strict=True):
+        schema, pyd_components = _split_pydantic_schema(pydantic_json_schema(t, mode=mode))
         schemas_by_index[i] = schema
         components.update(pyd_components)
 
