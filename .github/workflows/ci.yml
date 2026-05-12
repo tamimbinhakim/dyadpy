@@ -45,6 +45,9 @@ jobs:
       - run: pnpm lint:ts
       - run: pnpm format:check:ts
       - run: pnpm format:check:docs
+      # Typecheck imports `@tythe/ts`; build it (and the rest) first so
+      # the workspace symlink resolves to dist/.
+      - run: pnpm -r --filter=./packages/* run build
       - run: pnpm typecheck
 
   test-ts:
