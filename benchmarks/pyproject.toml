@@ -1,0 +1,25 @@
+[project]
+name = "tythe-benchmarks"
+version = "0.0.0"
+description = "Latency + throughput comparison of Tythe vs FastAPI vs Litestar on identical handlers."
+requires-python = ">=3.12"
+dependencies = [
+    "tythe",
+    "fastapi>=0.115",
+    "litestar>=2.12",
+    "uvicorn>=0.34",
+    "httpx>=0.28",
+    "msgspec>=0.19",
+    "pydantic>=2.9",
+]
+
+[tool.uv.sources]
+tythe = { path = "../packages/tythe", editable = true }
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["E501"]

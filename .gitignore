@@ -76,6 +76,13 @@ htmlcov/
 # regenerated on dev. Comment out if you want them committed.
 **/lib/tythe/client.ts
 
+# ---- Benchmarks ----
+benchmarks/results/
+benchmarks/uv.lock
+
+# ---- SvelteKit generated ----
+.svelte-kit/
+
 # ---- Env / secrets ----
 .env
 .env.*
