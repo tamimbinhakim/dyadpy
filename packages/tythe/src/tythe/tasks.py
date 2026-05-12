@@ -63,7 +63,9 @@ class TaskBackend(Protocol):
 class _InMemoryRecord:
     state: TaskState[Any]
     task: asyncio.Task[Any] | None = None
-    listeners: list[asyncio.Queue[TaskState[Any]]] = field(default_factory=list)
+    listeners: list[asyncio.Queue[TaskState[Any]]] = field(
+        default_factory=lambda: [],
+    )
 
 
 class InMemoryBackend:

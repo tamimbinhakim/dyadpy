@@ -20,7 +20,7 @@ from __future__ import annotations
 import inspect
 import typing
 from dataclasses import dataclass, fields
-from typing import Any
+from typing import Any, cast
 
 import msgspec
 
@@ -207,7 +207,8 @@ def _split_pydantic_schema(
     msgspec's, and the schema rewritten to be a bare ``$ref`` so it slots into
     the same slot-by-index machinery msgspec types use.
     """
-    defs = schema.pop("$defs", {}) or {}
+    defs_any: Any = schema.pop("$defs", {}) or {}
+    defs = cast("dict[str, dict[str, Any]]", defs_any)
     components: dict[str, dict[str, Any]] = dict(defs)
     title = schema.get("title")
     if title and schema.get("type") == "object":

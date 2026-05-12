@@ -30,7 +30,7 @@ function buildRequest(
   baseUrl: string,
   defaultHeaders: Record<string, string> | undefined,
 ): { url: string; init: RequestInit } {
-  let path = route.path;
+  let { path } = route;
   const query = new URLSearchParams();
   const headers: Record<string, string> = { ...defaultHeaders, ...opts.headers };
 
@@ -58,7 +58,7 @@ function buildRequest(
       case "cookie": {
         // Browsers won't let JS set Cookie directly — userland can override.
         const prev = headers["cookie"];
-        headers["cookie"] = (prev ? `${prev}; ` : "") + `${p.alias}=${String(v)}`;
+        headers["cookie"] = `${prev ? `${prev}; ` : ""}${p.alias}=${String(v)}`;
         break;
       }
       case "file": {
@@ -180,7 +180,7 @@ function camelToSnake(s: string): string {
 
 function isPlainObject(x: unknown): x is Record<string, unknown> {
   return (
-    !!x &&
+    Boolean(x) &&
     typeof x === "object" &&
     (Object.getPrototypeOf(x) === Object.prototype || Object.getPrototypeOf(x) === null)
   );

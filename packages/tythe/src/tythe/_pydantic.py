@@ -10,8 +10,8 @@ from __future__ import annotations
 
 from typing import Any
 
-_PYDANTIC_BASE_MODEL: Any = None
-_IMPORT_TRIED = False
+_cached_base_model: Any = None
+_import_tried = False
 
 
 def _try_import() -> Any:
@@ -19,15 +19,15 @@ def _try_import() -> Any:
 
     Cached so the import attempt only happens once per process.
     """
-    global _PYDANTIC_BASE_MODEL, _IMPORT_TRIED
-    if _IMPORT_TRIED:
-        return _PYDANTIC_BASE_MODEL
-    _IMPORT_TRIED = True
+    global _cached_base_model, _import_tried
+    if _import_tried:
+        return _cached_base_model
+    _import_tried = True
     try:
         from pydantic import BaseModel
     except ImportError:
         return None
-    _PYDANTIC_BASE_MODEL = BaseModel
+    _cached_base_model = BaseModel
     return BaseModel
 
 

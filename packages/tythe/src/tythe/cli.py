@@ -25,7 +25,7 @@ import typer
 import uvicorn
 from rich import print as rprint
 from rich.console import Console
-from watchfiles import awatch
+from watchfiles import awatch  # pyright: ignore[reportUnknownVariableType]
 
 from tythe import __version__
 from tythe.app import App

@@ -1,10 +1,9 @@
-import {
-  useMutation as useRQMutation,
-  useQuery as useRQQuery,
-  type UseMutationOptions,
-  type UseMutationResult,
-  type UseQueryOptions,
-  type UseQueryResult,
+import { useMutation as useRQMutation, useQuery as useRQQuery } from "@tanstack/react-query";
+import type {
+  UseMutationOptions,
+  UseMutationResult,
+  UseQueryOptions,
+  UseQueryResult,
 } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -113,7 +112,7 @@ export function createTytheHooks<TApi extends object>(api: TApi): TytheHooks<TAp
   ): UseTytheSubscriptionResult {
     const { enabled = true, onEvent, onOpen, onClose, onError } = options;
     const [status, setStatus] = useState<SubscriptionStatus>("idle");
-    const [error, setError] = useState<unknown>(null);
+    const [errorState, setError] = useState<unknown>(null);
 
     // Latest callbacks held in a ref so an inline `onEvent={(e) => ...}` doesn't
     // tear down the stream every render.
@@ -145,11 +144,11 @@ export function createTytheHooks<TApi extends object>(api: TApi): TytheHooks<TAp
           if (controller.signal.aborted) return;
           setStatus("closed");
           cb.current.onClose?.();
-        } catch (err) {
+        } catch (error) {
           if (controller.signal.aborted) return;
-          setError(err);
+          setError(error);
           setStatus("error");
-          cb.current.onError?.(err);
+          cb.current.onError?.(error);
         }
       })();
 
@@ -157,7 +156,7 @@ export function createTytheHooks<TApi extends object>(api: TApi): TytheHooks<TAp
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [enabled, method, argsKey]);
 
-    return { status, error };
+    return { status, error: errorState };
   }
 
   return { useQuery, useMutation, useSubscription };

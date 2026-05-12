@@ -12,7 +12,7 @@ the wire protocol by hand. Not full feature parity with the TS codegen.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from tythe.ir import AppIR, RouteIR
 
@@ -41,12 +41,13 @@ def write_swift(ir: AppIR, out: Path) -> None:
 
 
 def _swift_struct(name: str, schema: dict[str, Any]) -> str:
-    props = schema.get("properties") or {}
-    if not isinstance(props, dict):
+    props_any: Any = schema.get("properties")
+    if not isinstance(props_any, dict):
         return ""
+    props = cast("dict[str, Any]", props_any)
     lines = [f"public struct {_swift_ident(name)}: Codable {{\n"]
     for field_name, child in props.items():
-        lines.append(f"    public let {_swift_ident(str(field_name))}: {_swift_type(child)}\n")
+        lines.append(f"    public let {_swift_ident(field_name)}: {_swift_type(child)}\n")
     lines.append("}\n\n")
     return "".join(lines)
 
@@ -67,7 +68,8 @@ def _swift_method(route: RouteIR) -> str:
 def _swift_type(schema: Any) -> str:
     if not isinstance(schema, dict):
         return "AnyCodable"
-    t = schema.get("type")
+    s = cast("dict[str, Any]", schema)
+    t = s.get("type")
     if t == "string":
         return "String"
     if t in ("integer", "number"):
@@ -75,9 +77,9 @@ def _swift_type(schema: Any) -> str:
     if t == "boolean":
         return "Bool"
     if t == "array":
-        return f"[{_swift_type(schema.get('items'))}]"
-    if "$ref" in schema:
-        return _swift_ident(str(schema["$ref"]).rsplit("/", 1)[-1])
+        return f"[{_swift_type(s.get('items'))}]"
+    if "$ref" in s:
+        return _swift_ident(str(s["$ref"]).rsplit("/", 1)[-1])
     return "AnyCodable"
 
 
@@ -110,10 +112,11 @@ def write_kotlin(ir: AppIR, out: Path, *, package: str = "com.tythe.generated") 
 
 
 def _kotlin_data_class(name: str, schema: dict[str, Any]) -> str:
-    props = schema.get("properties") or {}
-    if not isinstance(props, dict):
+    props_any: Any = schema.get("properties")
+    if not isinstance(props_any, dict):
         return ""
-    fields_out = [f"    val {_kotlin_ident(str(k))}: {_kotlin_type(v)}" for k, v in props.items()]
+    props = cast("dict[str, Any]", props_any)
+    fields_out = [f"    val {_kotlin_ident(k)}: {_kotlin_type(v)}" for k, v in props.items()]
     return (
         f"@Serializable\ndata class {_kotlin_ident(name)}(\n" + ",\n".join(fields_out) + "\n)\n\n"
     )
@@ -127,7 +130,8 @@ def _kotlin_method(route: RouteIR) -> str:
 def _kotlin_type(schema: Any) -> str:
     if not isinstance(schema, dict):
         return "Any"
-    t = schema.get("type")
+    s = cast("dict[str, Any]", schema)
+    t = s.get("type")
     if t == "string":
         return "String"
     if t == "integer":
@@ -137,9 +141,9 @@ def _kotlin_type(schema: Any) -> str:
     if t == "boolean":
         return "Boolean"
     if t == "array":
-        return f"List<{_kotlin_type(schema.get('items'))}>"
-    if "$ref" in schema:
-        return _kotlin_ident(str(schema["$ref"]).rsplit("/", 1)[-1])
+        return f"List<{_kotlin_type(s.get('items'))}>"
+    if "$ref" in s:
+        return _kotlin_ident(str(s["$ref"]).rsplit("/", 1)[-1])
     return "Any"
 
 
