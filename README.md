@@ -256,6 +256,21 @@ stable in shape; the internals may move. Pin exact versions until 1.0.
 I'm dogfooding this on real projects and shipping changes weekly. If you
 want to follow along, watch the repo and read [ROADMAP.md](./ROADMAP.md).
 
+## Stability commitments
+
+The four pillars of the v1.0 freeze are written down, not just
+promised:
+
+- **Public API** — what we keep stable, what counts as a break, the
+  deprecation cycle: [`docs/semver.md`](./docs/semver.md).
+- **Wire format / IR** — additive-only invariants on the JSON-Schema
+  IR and the on-the-wire envelope: [`docs/ir-stability.md`](./docs/ir-stability.md).
+- **LTS** — support windows, backport policy, EOL rules:
+  [`docs/lts.md`](./docs/lts.md).
+- **Codegen output** — the generated TypeScript client is part of the
+  surface, not an implementation detail. A minor bump must not break a
+  working client.
+
 ## Contributing
 
 I love PRs. I love issues that start with "I tried to do X and got

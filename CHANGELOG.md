@@ -22,3 +22,10 @@ the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 ### Added
 
 - Initial repository scaffold.
+- Governance: the v1.0 stability commitments are written down rather
+  than just promised. Four documents cover the corners that matter —
+  [`docs/semver.md`](./docs/semver.md) (public API + deprecation cycle),
+  [`docs/ir-stability.md`](./docs/ir-stability.md) (wire format / IR
+  invariants), [`docs/lts.md`](./docs/lts.md) (support windows + EOL),
+  and the codegen-output-is-part-of-the-surface clause that's now part
+  of the README.

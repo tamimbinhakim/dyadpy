@@ -77,7 +77,7 @@ is mostly there; v0.2 is about removing rough edges.
 - [x] **Generated-client diff in CI.** `tythe diff <old> <new>` flags
       removed routes / renamed fields / narrowed types as breaking.
 - [x] **`Task[T]` wired into the runtime.** `mount_task_routes(app, path,
-  handler, backend=...)` registers `POST <path>` (submit) +
+handler, backend=...)` registers `POST <path>` (submit) +
       `GET <path>/{task_id}` (status) + `GET <path>/{task_id}/events`
       (SSE) from one handler. TS codegen for a `useTask` hook is on
       v0.2.x; today clients call the three generated methods directly.
@@ -118,11 +118,17 @@ Real, but unsized. Each lands when it earns its keep:
 
 When we tag 1.0:
 
-- [ ] Wire format frozen. Backwards-compatible IR additions only;
-      no field removals / renames without a deprecation cycle.
-- [ ] Public API frozen for one minor release before breaking.
-- [ ] Semver applies to runtime + codegen output.
-- [ ] Documented LTS line.
+- [x] **Wire format frozen.** Backwards-compatible IR additions only; no
+      field removals / renames without a deprecation cycle. The rules
+      are spelled out in [`docs/ir-stability.md`](docs/ir-stability.md).
+- [x] **Public API frozen for one minor release before breaking.**
+      Removals and signature changes go through a deprecation cycle —
+      see [`docs/semver.md`](docs/semver.md).
+- [x] **Semver applies to runtime + codegen output.** A minor version
+      bump must not break a working client. Codegen output is part of
+      the surface, not an implementation detail.
+- [x] **Documented LTS line.** Support windows + backport policy in
+      [`docs/lts.md`](docs/lts.md).
 
 Until 1.0: pre-release. Pin exact versions.
 

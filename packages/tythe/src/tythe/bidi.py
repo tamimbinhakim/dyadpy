@@ -14,8 +14,9 @@ Wire format: JSON text frames, msgspec-encoded. Inbound frames are
 ``msgspec.json.decode``-d into ``R``; outbound frames are
 ``msgspec.json.encode``-d from ``S``.
 
-TS-side codegen for ``BidiChannel`` is on the v0.2.x roadmap. Today
-clients hand-write the WebSocket connection until that lands.
+TypeScript-side codegen for ``BidiChannel`` is not yet implemented;
+clients connect to the WebSocket directly and send / receive JSON
+frames matching the ``R`` / ``S`` shapes.
 """
 
 from __future__ import annotations
