@@ -8,7 +8,6 @@ import asyncio
 from dataclasses import dataclass
 
 import msgspec
-
 from tythe import App, raises, stream
 
 app = App()

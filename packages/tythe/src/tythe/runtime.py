@@ -180,9 +180,30 @@ def _has_struct_attrs(t: object) -> bool:
 
 
 class ValidationError(Exception):
-    def __init__(self, message: str, *, location: ParamLocation | None = None) -> None:
+    """Raised when an inbound request fails validation.
+
+    The 422 response body shape is::
+
+        {
+          "detail": "human-readable message",
+          "location": "body" | "query" | ...,
+          "field": "data.items[2].name" | None,
+          "value": <offending raw value, or None if missing entirely>
+        }
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        location: ParamLocation | None = None,
+        field: str | None = None,
+        value: Any = None,
+    ) -> None:
         super().__init__(message)
         self.location = location
+        self.field = field
+        self.value = value
 
 
 async def _read_value(
@@ -225,10 +246,10 @@ async def _read_value(
                 if not spec.required:
                     return spec.default
                 raise _missing(spec)
-            return _convert_body(body_cache[spec.alias], spec.py_type)
+            return _convert_body(body_cache[spec.alias], spec.py_type, alias=spec.alias)
         if not body_cache and not spec.required:
             return spec.default
-        return _convert_body(body_cache, spec.py_type)
+        return _convert_body(body_cache, spec.py_type, alias=spec.alias)
     if spec.location == "file":
         assert form_cache is not None
         value = form_cache.get(spec.alias)
@@ -240,14 +261,119 @@ async def _read_value(
     raise AssertionError(f"unreachable location: {spec.location!r}")
 
 
-def _convert_body(value: Any, py_type: Any) -> Any:
-    """Pydantic BaseModel → ``model_validate``; everything else → msgspec.convert."""
+def _convert_body(value: Any, py_type: Any, *, alias: str | None = None) -> Any:
+    """Pydantic BaseModel → ``model_validate``; everything else → msgspec.convert.
+
+    On failure raises ``ValidationError`` with a field path scoped under
+    ``alias`` (e.g. ``data.items[2].name``) and the offending raw value.
+    """
     if py_type is bytes:
-        # Raw-body params skip the JSON decode; runtime feeds bytes directly.
         return value
-    if is_pydantic_model(py_type):
-        return pydantic_validate(py_type, value)
-    return msgspec.convert(value, type=py_type, strict=False)
+    try:
+        if is_pydantic_model(py_type):
+            return pydantic_validate(py_type, value)
+        return msgspec.convert(value, type=py_type, strict=False)
+    except msgspec.ValidationError as exc:
+        field, offending = _msgspec_field_and_value(value, str(exc), alias)
+        raise ValidationError(str(exc), location="body", field=field, value=offending) from exc
+    except Exception as exc:
+        # Pydantic ValidationError lives outside our import chain; duck-type.
+        first = _pydantic_first_error(exc)
+        if first is not None:
+            loc = cast("tuple[Any, ...]", first.get("loc", ()))
+            raise ValidationError(
+                str(first.get("msg", exc)),
+                location="body",
+                field=_join_pydantic_path(loc, alias),
+                value=first.get("input"),
+            ) from exc
+        raise
+
+
+def _pydantic_first_error(exc: Exception) -> dict[str, Any] | None:
+    errs = getattr(exc, "errors", None)
+    if not callable(errs):
+        return None
+    try:
+        errors: Any = errs()
+    except Exception:
+        return None
+    for item in errors:
+        return cast("dict[str, Any]", item)
+    return None
+
+
+def _msgspec_field_and_value(
+    payload: Any,
+    msg: str,
+    alias: str | None,
+) -> tuple[str | None, Any]:
+    """Pull the offending field path + value out of a msgspec error message.
+
+    msgspec has two error shapes:
+    - ``Expected float, got str - at `$.items[1].weight``` (type mismatch)
+    - ``Object missing required field `label``` (missing top-level field)
+
+    Best-effort parse — if we can't recover a path, fall back to the alias scope.
+    """
+    import re
+
+    # Type-mismatch / nested-path shape carries `at $.foo.bar`.
+    path_match = re.search(r"at `\$\.?([^`]*)`", msg)
+    field_path = path_match.group(1) if path_match else ""
+
+    # Missing-required-field shape: `Object missing required field \`X\``.
+    if not field_path:
+        miss = re.search(r"missing required field `([^`]+)`", msg)
+        if miss:
+            field_path = miss.group(1)
+
+    field = _scope(alias, field_path) if field_path else alias
+    offending = _walk_path(payload, field_path)
+    return field, offending
+
+
+def _walk_path(value: Any, path: str) -> Any:
+    """Walk ``foo.bar[2].baz`` style paths into a nested dict/list payload."""
+    if not path:
+        return value
+    import re
+
+    cursor: Any = value
+    for token in re.findall(r"[^.\[\]]+|\[\d+\]", path):
+        if token.startswith("[") and token.endswith("]"):
+            idx = int(token[1:-1])
+            if isinstance(cursor, list):
+                items = cast("list[Any]", cursor)
+                if 0 <= idx < len(items):
+                    cursor = items[idx]
+                    continue
+            return None
+        if isinstance(cursor, dict):
+            cursor = cast("dict[str, Any]", cursor).get(token)
+            continue
+        return None
+    return cursor
+
+
+def _scope(alias: str | None, sub: str) -> str:
+    if not alias:
+        return sub
+    return f"{alias}.{sub}" if sub else alias
+
+
+def _join_pydantic_path(loc: tuple[Any, ...], alias: str | None) -> str:
+    """Convert Pydantic's ``loc`` tuple into a dotted/bracketed field path."""
+    parts: list[str] = []
+    for piece in loc:
+        if isinstance(piece, int):
+            parts.append(f"[{piece}]")
+        elif parts:
+            parts.append(f".{piece}")
+        else:
+            parts.append(str(piece))
+    inner = "".join(parts)
+    return _scope(alias, inner)
 
 
 def _optional_or_convert(raw: str | None, spec: ParamSpec) -> Any:
@@ -287,7 +413,12 @@ def _list_item_type(t: Any) -> Any:
 
 
 def _missing(spec: ParamSpec) -> ValidationError:
-    return ValidationError(f"missing required parameter {spec.alias!r}", location=spec.location)
+    return ValidationError(
+        f"missing required parameter {spec.alias!r}",
+        location=spec.location,
+        field=spec.alias,
+        value=None,
+    )
 
 
 _json_encoder = msgspec.json.Encoder()
@@ -414,7 +545,15 @@ class RouteRunner:
             return _build_response(result, self.plan, ctx_for_response)
         except ValidationError as exc:
             await _run_teardown(teardown)
-            return JSONResponse({"detail": str(exc), "location": exc.location}, status_code=422)
+            body: dict[str, Any] = {
+                "detail": str(exc),
+                "location": exc.location,
+            }
+            if exc.field is not None:
+                body["field"] = exc.field
+            if exc.value is not None or "value" in exc.__dict__:
+                body["value"] = exc.value
+            return JSONResponse(body, status_code=422)
         except Exception as exc:
             # Declared exceptions become Result envelopes whether they were
             # raised inside the handler body or inside a ``Depends(...)`` provider.

@@ -180,6 +180,30 @@ async def create_issue(data: CreateIssue, ctx: Context) -> Issue:
 | `ctx.cookies`                                                                                | Read-only dict of request cookies.                                                    |
 | `await ctx.is_disconnected()`                                                                | Client-gone check (use it inside long-running streams).                               |
 
+## Validation errors
+
+When an inbound request fails parameter validation, Tythe returns **HTTP 422**
+with a structured body:
+
+```json
+{
+  "detail": "Expected `float`, got `str`",
+  "location": "body",
+  "field": "data.items[2].weight",
+  "value": "not-a-number"
+}
+```
+
+| Field      | Meaning                                                                              |
+| ---------- | ------------------------------------------------------------------------------------ |
+| `detail`   | Human-readable message from msgspec or Pydantic.                                     |
+| `location` | Which input slot failed — `body` / `query` / `header` / `cookie` / `path` / `file`.  |
+| `field`    | Dotted/bracketed path to the offending field (`alias.foo[2].bar`), or `null` if N/A. |
+| `value`    | The offending raw value as received, or `null` if the field was missing entirely.    |
+
+The TS client throws on 422 — wrap calls in `try/catch` and inspect the body if you
+need to surface field-level errors in a form.
+
 ## Typed errors
 
 Declare which exceptions a handler can raise. They become a discriminated union

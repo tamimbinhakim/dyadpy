@@ -7,7 +7,6 @@ from __future__ import annotations
 import json
 
 import pydantic
-import pytest
 from starlette.testclient import TestClient
 
 from tythe import App
@@ -55,8 +54,8 @@ def test_pydantic_response_is_serialized() -> None:
     assert r.json() == {"id": 42, "title": "t", "body": "b", "tags": ["a"]}
 
 
-def test_pydantic_invalid_body_returns_500_or_422() -> None:
-    """Validation failure surfaces as an error response (Pydantic raises ValidationError)."""
+def test_pydantic_invalid_body_returns_422_with_field_path() -> None:
+    """Pydantic validation errors land as 422 with the offending field path."""
     app = App()
 
     @app.post("/posts")
@@ -64,8 +63,12 @@ def test_pydantic_invalid_body_returns_500_or_422() -> None:
         return Post(id=1, title=data.title, body=data.body, tags=data.tags)
 
     client = TestClient(app)
-    with pytest.raises(pydantic.ValidationError):
-        client.post("/posts", json={"title": "hi"})  # missing body
+    r = client.post("/posts", json={"title": "hi"})  # missing body
+    assert r.status_code == 422
+    payload = r.json()
+    assert payload["location"] == "body"
+    assert payload["field"] is not None
+    assert "body" in payload["field"]  # the missing field is named in the path
 
 
 def test_pydantic_schema_in_ir_and_codegen() -> None:
