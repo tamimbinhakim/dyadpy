@@ -76,8 +76,11 @@ is mostly there; v0.2 is about removing rough edges.
       value in the 422 body, both for msgspec and Pydantic.
 - [ ] **Generated-client diff in CI.** `tythe diff <old> <new>` flags
       removed routes / renamed fields / narrowed types as breaking.
-- [ ] **`Task[T]` wired into runtime + codegen.** Annotation
-      `-> Task[T]` produces a typed task-id + polling/stream client.
+- [x] **`Task[T]` wired into the runtime.** `mount_task_routes(app, path,
+    handler, backend=...)` registers `POST <path>` (submit) +
+      `GET <path>/{task_id}` (status) + `GET <path>/{task_id}/events`
+      (SSE) from one handler. TS codegen for a `useTask` hook is on
+      v0.2.x; today clients call the three generated methods directly.
 - [ ] **Streaming `Last-Event-Id` resumption.** SSE handlers can carry
       ids; client passes them on reconnect. Production-grade streams
       without a separate package.

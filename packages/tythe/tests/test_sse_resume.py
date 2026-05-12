@@ -62,8 +62,10 @@ def test_full_handler_yields_sse_payload_with_id() -> None:
 
     @app.get("/feed")
     async def feed() -> stream[Tick]:
-        yield SsePayload(data=Tick(n=1), id="1", retry_ms=500)
-        yield SsePayload(data=Tick(n=2), id="2")
+        # Runtime allows yielding bare T *or* SsePayload[T]; the static
+        # annotation describes the data shape, the wire wrapper is opt-in.
+        yield SsePayload(data=Tick(n=1), id="1", retry_ms=500)  # pyright: ignore[reportReturnType]
+        yield SsePayload(data=Tick(n=2), id="2")  # pyright: ignore[reportReturnType]
 
     body = TestClient(app).get("/feed").text
     assert "id: 1\n" in body

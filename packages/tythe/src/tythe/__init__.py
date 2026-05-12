@@ -12,7 +12,7 @@ from tythe.context import Context, Depends, after
 from tythe.errors import raises
 from tythe.params import Form
 from tythe.streaming import SsePayload, stream
-from tythe.tasks import InMemoryBackend, TaskBackend, TaskState
+from tythe.tasks import InMemoryBackend, TaskBackend, TaskState, mount_task_routes
 
 # Raw-body sentinel: annotate a handler param or return with ``Bytes`` to
 # skip the JSON envelope entirely. Identical to the ``bytes`` builtin; the
@@ -32,6 +32,7 @@ __all__ = [
     "TaskState",
     "after",
     "bidi",
+    "mount_task_routes",
     "raises",
     "stream",
 ]

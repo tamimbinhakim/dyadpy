@@ -8,17 +8,31 @@ adapters belong in their own packages so the core stays dependency-light.
 Backend implementations expose four primitives: ``enqueue``, ``status``,
 ``stream``, ``cancel``. Anything that satisfies the ``TaskBackend``
 Protocol qualifies.
+
+``mount_task_routes`` wires one handler into the submit/status/stream
+triple at a single path prefix, so a handler ``def transcribe(audio)``
+mounted at ``/transcribe`` becomes ``POST /transcribe`` (submit),
+``GET /transcribe/{task_id}`` (status), ``GET /transcribe/{task_id}/events``
+(SSE progress).
 """
 
 from __future__ import annotations
 
 import asyncio
 import contextlib
+import inspect
 import time
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field, replace
-from typing import Any, Generic, Literal, Protocol, TypeVar, runtime_checkable
+from typing import TYPE_CHECKING, Any, Generic, Literal, Protocol, TypeVar, runtime_checkable
+
+import msgspec
+
+from tythe.streaming import stream
+
+if TYPE_CHECKING:
+    from tythe.app import App
 
 T = TypeVar("T")
 
@@ -132,3 +146,103 @@ class InMemoryBackend:
         if record is None or record.task is None:
             return
         record.task.cancel()
+
+
+class TaskSubmission(msgspec.Struct):
+    """Response shape from the submit route — clients poll ``task_id`` for progress."""
+
+    task_id: str
+
+
+def mount_task_routes(
+    app: App,
+    path: str,
+    handler: Callable[..., Awaitable[Any]],
+    *,
+    backend: TaskBackend,
+) -> None:
+    """Register submit / status / stream routes for a long-running handler.
+
+    Three routes get added at ``path``:
+
+    - ``POST <path>``: validates handler inputs, calls ``backend.enqueue``,
+      returns ``{"task_id": "..."}``. Inputs are taken from the handler's
+      own signature, so query/body/path conventions are identical to a
+      regular Tythe route.
+    - ``GET <path>/{task_id}``: returns ``TaskState[T]`` (a one-shot poll).
+    - ``GET <path>/{task_id}/events``: SSE stream of ``TaskState[T]``
+      updates, terminating once the task reaches a final status.
+
+    The handler's return type ``T`` is reused as the ``TaskState[T]``
+    payload — both status and stream routes round-trip a result of the
+    same shape.
+    """
+    import typing as _typing
+
+    handler_sig = inspect.signature(handler)
+    handler_localns: dict[str, Any] | None = getattr(handler, "__tythe_localns__", None)
+    # Forward the *handler's* module globals (plus any captured localns) so
+    # ``typing.get_type_hints`` can resolve string annotations on the wrappers,
+    # whose own ``__globals__`` would be this module (tasks.py).
+    handler_globals: dict[str, Any] = getattr(handler, "__globals__", {})
+    forward_ns: dict[str, Any] = {**handler_globals}
+    if handler_localns:
+        forward_ns.update(handler_localns)
+
+    handler_hints = _typing.get_type_hints(handler, localns=forward_ns, include_extras=True)
+    result_type: Any = handler_hints.get("return", Any)
+    state_type = TaskState[result_type] if result_type is not Any else TaskState[Any]
+
+    async def submit(**kwargs: Any) -> TaskSubmission:
+        task_id = await backend.enqueue(handler, **kwargs)
+        return TaskSubmission(task_id=task_id)
+
+    submit.__name__ = f"submit_{handler.__name__}"
+    submit.__qualname__ = submit.__name__
+    setattr(submit, "__signature__", handler_sig.replace(return_annotation=TaskSubmission))  # noqa: B010
+    submit.__annotations__ = {**handler.__annotations__, "return": TaskSubmission}
+
+    async def status(task_id: str) -> TaskState[Any]:
+        try:
+            return await backend.status(task_id)
+        except KeyError as exc:
+            from tythe.runtime import ValidationError
+
+            raise ValidationError(
+                "task not found",
+                location="path",
+                field="task_id",
+                value=task_id,
+            ) from exc
+
+    status.__name__ = f"status_{handler.__name__}"
+    status.__qualname__ = status.__name__
+    status.__annotations__ = {"task_id": str, "return": state_type}
+
+    async def events(task_id: str) -> AsyncIterator[TaskState[Any]]:
+        try:
+            iterator = backend.stream(task_id)
+        except KeyError as exc:
+            from tythe.runtime import ValidationError
+
+            raise ValidationError(
+                "task not found",
+                location="path",
+                field="task_id",
+                value=task_id,
+            ) from exc
+        async for state in iterator:
+            yield state
+
+    events.__name__ = f"events_{handler.__name__}"
+    events.__qualname__ = events.__name__
+    events.__annotations__ = {"task_id": str, "return": stream[state_type]}
+
+    app.post(path)(submit)
+    app.get(f"{path}/{{task_id}}")(status)
+    app.get(f"{path}/{{task_id}}/events")(events)
+    # ``app._register`` stamps each handler's ``__tythe_localns__`` with its
+    # *caller's* frame locals — which here is this function, not the user's
+    # module. Overwrite with the handler's resolved namespace so deferred
+    # annotations like ``-> TranscribeInput`` resolve correctly later.
+    setattr(submit, "__tythe_localns__", forward_ns)  # noqa: B010

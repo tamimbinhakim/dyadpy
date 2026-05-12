@@ -366,6 +366,36 @@ async def status(task_id: str) -> TaskState[str]:
 `InMemoryBackend.stream(task_id)` yields `TaskState` snapshots through the
 queued → running → succeeded/failed/cancelled lifecycle.
 
+### One-call submit + status + stream
+
+`mount_task_routes` registers the submit / status / stream triple from a
+single handler, so you don't hand-write the three routes:
+
+```python
+from tythe import App, InMemoryBackend, mount_task_routes
+
+app = App()
+backend = InMemoryBackend()
+
+async def transcribe(payload: TranscribeInput) -> Transcript:
+    return await run_model(payload.audio_url)
+
+mount_task_routes(app, "/transcribe", transcribe, backend=backend)
+```
+
+This wires:
+
+- `POST /transcribe` — body matches `transcribe`'s own param shape;
+  returns `{"task_id": "..."}`.
+- `GET /transcribe/{task_id}` — returns `TaskState[Transcript]`.
+- `GET /transcribe/{task_id}/events` — SSE stream of `TaskState[Transcript]`
+  until the task reaches a terminal status (`succeeded` / `failed` /
+  `cancelled`).
+
+The handler's return type flows into `TaskState[T]` automatically. Unknown
+task ids surface as a structured 422 on either polling route — the same
+shape produced by request validation errors.
+
 ## Observability
 
 ```python
