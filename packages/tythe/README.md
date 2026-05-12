@@ -74,20 +74,47 @@ in your frontend:
 ```ts
 import { api } from "@/lib/tythe/client";
 
-const post = await api.create_post({ title: "hi", body: "world" });
+const post = await api.createPost({ data: { title: "hi", body: "world" } });
 
 for await (const ev of api.ticks({ count: 10 })) {
   /* typed */
 }
 ```
 
+## Primitives in this package
+
+| Primitive                                                           | Purpose                                                     |
+| ------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `App` + `@app.{get,post,put,patch,delete}`                          | Route decorators.                                           |
+| `Annotated[T, Body / Query / Path / Header / Cookie / File / Form]` | Parameter location markers.                                 |
+| `Annotated[list[T], Query()]`                                       | Repeated query params (`?tag=a&tag=b`).                     |
+| `Bytes`                                                             | Raw request / response bodies. Skips the JSON envelope.     |
+| `stream[T]`                                                         | Typed SSE — client gets `AsyncIterable<T>`.                 |
+| `@raises(E1, E2, …)`                                                | Typed error union → `Result<T, E1 \| E2>` on the TS side.   |
+| `Context.set_status / set_header / set_cookie / after`              | Shape the response without dropping to Starlette.           |
+| `Depends(provider)`                                                 | DI in the FastAPI shape.                                    |
+| `after(fn, …)`                                                      | Run a callback after the response is sent.                  |
+| `InMemoryBackend` + `TaskBackend` Protocol                          | Background jobs.                                            |
+| `tythe.otel.instrument(app)`                                        | One OpenTelemetry span per request (`tythe[otel]`).         |
+| `tythe openapi / swift / kotlin` (CLI)                              | Emit OpenAPI 3.1, Swift, or Kotlin clients off the same IR. |
+
+Full reference: <https://github.com/tamimbinhakim/tythe/blob/main/docs/reference.md>
+
+## Optional extras
+
+```bash
+uv add 'tythe[pydantic]'  # Pydantic plugin (model_validate + model_json_schema)
+uv add 'tythe[otel]'      # OpenTelemetry middleware
+uv add 'tythe[all]'       # everything
+```
+
 ## Scope
 
-Tythe ships at the fundamental level: RPC, typed streaming, typed
-errors, cancellation, file uploads, dependency injection. It does
-**not** ship vertical integrations — no LLM types, no React hooks in
-core, no chat-bot primitives. Those layers compose on top of the
-fundamentals and live in their own packages.
+Tythe ships at the wire level: RPC, typed streaming, typed errors,
+cancellation, file uploads, dependency injection. It does **not** ship
+vertical integrations — no LLM types, no React hooks in core, no
+chat-bot primitives. Those layers compose on top of the fundamentals
+and live in their own packages.
 
 ## License
 

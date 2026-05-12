@@ -61,6 +61,27 @@ Once the core is solid, meet the JS ecosystem where it lives.
       `tythe.otel.instrument(app)`
 - [x] `tythe deploy` thin wrapper for Fly / Render / Modal
 
+## What we won't do _in core_ — meta-frameworks territory
+
+These are real, useful patterns. They don't belong inside `tythe` because
+they carry opinion about how an app is structured. They belong in a
+meta-framework that sits on top of the IR and the runtime — possibly one
+we ship separately (working title: `tythe-kit`).
+
+- **File-based routing.** Scan a `routes/` tree, register handlers by
+  filename, hot-reload on change. Pure convenience layer over `App`.
+- **Monorepo scaffolds.** `npx create-tythe-app` with a baked-in
+  Next.js / Vite / SvelteKit frontend wired to a Python server.
+- **Auth presets.** A `tythe-auth-clerk` / `tythe-auth-nextauth` that
+  wires `Depends(current_user)` for you.
+- **AI / LLM templates.** Token-streaming routes, tool-call shapes,
+  rate-limited inference endpoints — opinion-heavy, separate package.
+- **Admin UIs / dashboards** generated from the IR.
+
+The IR (`tythe.ir`) and the CLI codegen entry points are deliberately
+designed to make these buildable from outside. If you'd like to ship
+one, open an issue — happy to help shape the seams.
+
 ## Won't do (probably)
 
 Some lines I'm holding for now. If enough people push back I'll
