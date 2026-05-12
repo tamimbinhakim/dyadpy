@@ -10,7 +10,7 @@ from tythe.app import App
 from tythe.context import Context, Depends, after
 from tythe.errors import raises
 from tythe.params import Form
-from tythe.streaming import stream
+from tythe.streaming import SsePayload, stream
 from tythe.tasks import InMemoryBackend, TaskBackend, TaskState
 
 # Raw-body sentinel: annotate a handler param or return with ``Bytes`` to
@@ -25,6 +25,7 @@ __all__ = [
     "Depends",
     "Form",
     "InMemoryBackend",
+    "SsePayload",
     "TaskBackend",
     "TaskState",
     "after",

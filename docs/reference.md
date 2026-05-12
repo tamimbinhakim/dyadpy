@@ -276,6 +276,31 @@ for await (const ev of api.ticks({ count: 10 }, { signal: ac.signal })) {
 Streams + `@raises(...)`: declared errors surface as SSE `event: error`
 frames that throw on the client side.
 
+### Resumption with `SsePayload` / `Last-Event-Id`
+
+Wrap events in `SsePayload(data, id=..., retry_ms=...)` to attach an
+SSE `id:` and an optional `retry:` hint. The TS client tracks the last
+seen id and reconnects with `Last-Event-Id` if the connection drops:
+
+```python
+from tythe import SsePayload, Context, stream
+from tythe.params import Header
+from typing import Annotated
+
+@app.get("/events")
+async def events(
+    last_event_id: Annotated[str | None, Header("Last-Event-Id")] = None,
+) -> stream[Event]:
+    cursor = parse_cursor(last_event_id) if last_event_id else 0
+    async for ev in store.since(cursor):
+        yield SsePayload(data=ev, id=str(ev.seq), retry_ms=3000)
+```
+
+The client side is fully automatic — `for await (const ev of api.events())`
+reconnects with the right header on any transport error, capped at 5
+minutes of cumulative retry. Typed `@raises` errors and explicit user
+cancellation (`AbortSignal`) still propagate immediately.
+
 ## Dependency injection
 
 ```python

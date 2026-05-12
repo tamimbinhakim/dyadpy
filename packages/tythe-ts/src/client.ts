@@ -14,10 +14,11 @@ export function createClient(config: ClientConfig): unknown {
       const route = byName.get(prop);
       if (!route) return undefined;
       return (args?: Args, opts: CallOptions = {}) => {
+        if (route.streams) {
+          return streamCall(route, args ?? {}, opts, baseUrl, config.headers, fetchImpl);
+        }
         const { url, init } = buildRequest(route, args ?? {}, opts, baseUrl, config.headers);
-        return route.streams
-          ? streamCall(url, init, fetchImpl)
-          : unaryCall(route, url, init, fetchImpl);
+        return unaryCall(route, url, init, fetchImpl);
       };
     },
   });
@@ -148,26 +149,95 @@ async function unaryCall(
   return await res.text();
 }
 
+// Streaming caller with built-in resume. We track the last `id:` seen and,
+// if the connection drops mid-stream, reconnect with `Last-Event-Id`. The
+// server's `retry:` value (in ms) controls the minimum backoff; we cap at
+// 30s and abort on user cancellation.
 async function* streamCall(
-  url: string,
-  init: RequestInit,
+  route: RouteDescriptor,
+  args: Args,
+  opts: CallOptions,
+  baseUrl: string,
+  defaultHeaders: Record<string, string> | undefined,
   fetchImpl: FetchImpl,
 ): AsyncIterableIterator<unknown> {
-  const res = await fetchImpl(url, init);
-  if (!res.ok) throw await httpError(res);
-  if (!res.body) return;
+  let lastId: string | undefined;
+  let retryMs = 1000; // default backoff if server doesn't send `retry:`
+  const startedAt = Date.now();
+  const maxResumeWindowMs = 5 * 60 * 1000; // give up after 5 min of failed reconnects
 
-  for await (const ev of parseSSE(res.body)) {
-    if (ev.event === "done") return;
-    if (ev.event === "error") {
-      throw Object.assign(new Error("stream error"), {
-        kind: "error",
-        payload: safeJsonParse(ev.data),
-      });
+  while (true) {
+    if (opts.signal?.aborted) return;
+    const headers: Record<string, string> = { ...defaultHeaders, ...opts.headers };
+    if (lastId !== undefined) headers["last-event-id"] = lastId;
+
+    const { url, init } = buildRequest(route, args, { ...opts, headers }, baseUrl, defaultHeaders);
+    let res: Response;
+    try {
+      res = await fetchImpl(url, init);
+    } catch (error) {
+      if (opts.signal?.aborted) return;
+      if (Date.now() - startedAt > maxResumeWindowMs) throw error;
+      await sleep(retryMs, opts.signal);
+      continue;
     }
-    if (ev.data === "") continue;
-    yield snakeToCamelDeep(safeJsonParse(ev.data));
+    if (!res.ok) throw await httpError(res);
+    if (!res.body) return;
+
+    let sawDone = false;
+    try {
+      for await (const ev of parseSSE(res.body)) {
+        if (ev.retry !== undefined) retryMs = Math.min(ev.retry, 30_000);
+        if (ev.id !== undefined) lastId = ev.id;
+        if (ev.event === "done") {
+          sawDone = true;
+          return;
+        }
+        if (ev.event === "error") {
+          // Typed stream errors are terminal — don't retry, propagate to caller.
+          throw Object.assign(new Error("stream error"), {
+            kind: "error",
+            payload: safeJsonParse(ev.data),
+            tytheTerminal: true,
+          });
+        }
+        if (ev.data === "") continue;
+        yield snakeToCamelDeep(safeJsonParse(ev.data));
+      }
+    } catch (error) {
+      if (opts.signal?.aborted) return;
+      if ((error as { tytheTerminal?: boolean })?.tytheTerminal) throw error;
+      if (Date.now() - startedAt > maxResumeWindowMs) throw error;
+      await sleep(retryMs, opts.signal);
+      continue;
+    }
+    // Stream ended without `event: done` — treat as a disconnect and reconnect.
+    if (sawDone) return;
+    if (opts.signal?.aborted) return;
+    if (Date.now() - startedAt > maxResumeWindowMs) return;
+    await sleep(retryMs, opts.signal);
   }
+}
+
+async function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) return;
+  await new Promise<void>((resolve) => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      resolve();
+    };
+    const timer = setTimeout(finish, ms);
+    signal?.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timer);
+        finish();
+      },
+      { once: true },
+    );
+  });
 }
 
 async function httpError(res: Response): Promise<Error & { status: number; body: string }> {

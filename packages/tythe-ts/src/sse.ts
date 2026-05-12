@@ -5,6 +5,8 @@ export interface SSEEvent {
   event?: string;
   data: string;
   id?: string;
+  /** ``retry:`` field, in milliseconds. Set by the server to suggest a backoff. */
+  retry?: number;
 }
 
 export async function* parseSSE(
@@ -36,6 +38,7 @@ export async function* parseSSE(
 function parseFrame(frame: string): SSEEvent | null {
   let event: string | undefined;
   let id: string | undefined;
+  let retry: number | undefined;
   const dataLines: string[] = [];
 
   for (const rawLine of frame.split("\n")) {
@@ -47,8 +50,12 @@ function parseFrame(frame: string): SSEEvent | null {
     if (field === "event") event = value;
     else if (field === "data") dataLines.push(value);
     else if (field === "id") id = value;
+    else if (field === "retry") {
+      const parsed = Number.parseInt(value, 10);
+      if (Number.isFinite(parsed) && parsed >= 0) retry = parsed;
+    }
   }
 
   if (dataLines.length === 0) return null;
-  return { event, id, data: dataLines.join("\n") };
+  return { event, id, retry, data: dataLines.join("\n") };
 }

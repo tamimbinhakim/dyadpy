@@ -75,4 +75,45 @@ describe("streaming client", () => {
 
     await expect(run()).rejects.toThrow(/stream error/);
   });
+
+  it("resumes with Last-Event-Id after a mid-stream disconnect", async () => {
+    // First connection: yields two events with ids 1 and 2, then drops.
+    // Second connection: must see Last-Event-Id: 2 in the request, yields
+    // event id 3 + done.
+    const calls: { headers: Record<string, string> }[] = [];
+    let attempt = 0;
+
+    const fetchMock = vi.fn<typeof fetch>(async (_url, init?: RequestInit) => {
+      const headers: Record<string, string> = {};
+      const raw = (init?.headers ?? {}) as Record<string, string>;
+      for (const k of Object.keys(raw)) headers[k.toLowerCase()] = raw[k]!;
+      calls.push({ headers });
+      attempt += 1;
+
+      if (attempt === 1) {
+        // Tell client retry=1ms so the test doesn't sit on a 1s default.
+        const body = sseStream(['retry: 1\nid: 1\ndata: {"n":1}\n\n', 'id: 2\ndata: {"n":2}\n\n']);
+        return new Response(body, {
+          status: 200,
+          headers: { "content-type": "text/event-stream" },
+        });
+      }
+      const body = sseStream(['id: 3\ndata: {"n":3}\n\n', "event: done\ndata: {}\n\n"]);
+      return new Response(body, {
+        status: 200,
+        headers: { "content-type": "text/event-stream" },
+      });
+    });
+
+    const api = createClient({ routes, fetch: fetchMock }) as {
+      chat: () => AsyncIterable<{ n: number }>;
+    };
+    const got: number[] = [];
+    for await (const ev of api.chat()) got.push(ev.n);
+
+    expect(got).toEqual([1, 2, 3]);
+    expect(calls).toHaveLength(2);
+    expect(calls[0]!.headers["last-event-id"]).toBeUndefined();
+    expect(calls[1]!.headers["last-event-id"]).toBe("2");
+  });
 });
