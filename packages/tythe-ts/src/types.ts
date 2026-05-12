@@ -17,6 +17,12 @@ export interface RouteDescriptor {
   params?: ReadonlyArray<ParamDescriptor>;
   streams?: boolean;
   result?: boolean;
+  /** Body is raw bytes (Blob / Uint8Array / ArrayBuffer) — skip JSON envelope. */
+  binaryBody?: boolean;
+  /** Response is raw bytes — decode with `res.blob()` instead of `res.json()`. */
+  binaryResponse?: boolean;
+  /** Body is application/x-www-form-urlencoded (or multipart/form-data when files present). */
+  formBody?: boolean;
 }
 
 export interface ClientConfig {
@@ -32,6 +38,21 @@ export interface CallOptions {
 }
 
 export type Result<T, E> = { ok: true; data: T } | { ok: false; error: E };
+
+/**
+ * Unwrap a Result envelope: returns `data` on success, throws `error` on failure.
+ * Plain (non-envelope) values pass through unchanged. Used by the framework
+ * binding packages so a typed error union lands on the consumer's `.error`
+ * slot rather than buried inside `.data`.
+ */
+type Envelope = { ok: boolean; data?: unknown; error?: unknown };
+export function unwrapResult(value: unknown): unknown {
+  if (value === null || typeof value !== "object") return value;
+  const e = value as Envelope;
+  if (typeof e.ok !== "boolean" || (!("data" in e) && !("error" in e))) return value;
+  if (e.ok) return e.data;
+  throw e.error;
+}
 
 // `OkOf` / `ErrOf` are the distributive workers; `Ok` / `Err` apply `Awaited`
 // first so users can pass a `Promise<Result<…>>` directly (which is what the

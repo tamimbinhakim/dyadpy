@@ -1,11 +1,11 @@
-import {
-  useMutation as useRQMutation,
-  useQuery as useRQQuery,
-  type UseMutationOptions,
-  type UseMutationResult,
-  type UseQueryOptions,
-  type UseQueryResult,
+import { useMutation as useRQMutation, useQuery as useRQQuery } from "@tanstack/react-query";
+import type {
+  UseMutationOptions,
+  UseMutationResult,
+  UseQueryOptions,
+  UseQueryResult,
 } from "@tanstack/react-query";
+import { unwrapResult } from "@tythe/ts";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import type {
@@ -20,18 +20,6 @@ import type {
 
 type Unary = (args?: unknown, opts?: { signal?: AbortSignal }) => Promise<unknown>;
 type Stream = (args?: unknown, opts?: { signal?: AbortSignal }) => AsyncIterable<unknown>;
-type Envelope = { ok: boolean; data?: unknown; error?: unknown };
-
-// Routes with `@raises(...)` on the Python side return `{ ok, data | error }`.
-// Unwrap so TanStack sees a plain success/throw split and the typed error union
-// lands on `.error` instead of buried inside `.data`.
-function unwrap(value: unknown): unknown {
-  if (value === null || typeof value !== "object") return value;
-  const e = value as Envelope;
-  if (typeof e.ok !== "boolean" || (!("data" in e) && !("error" in e))) return value;
-  if (e.ok) return e.data;
-  throw e.error;
-}
 
 export interface UseTytheSubscriptionOptions<TEvent> {
   enabled?: boolean;
@@ -85,7 +73,7 @@ export function createTytheHooks<TApi extends object>(api: TApi): TytheHooks<TAp
       ...options,
       queryFn: async ({ signal }) => {
         const fn = api[method] as unknown as Unary;
-        return unwrap(await fn(args as unknown, { signal })) as DataOf<TApi[K]>;
+        return unwrapResult(await fn(args as unknown, { signal })) as DataOf<TApi[K]>;
       },
     });
   }
@@ -101,7 +89,7 @@ export function createTytheHooks<TApi extends object>(api: TApi): TytheHooks<TAp
       ...options,
       mutationFn: async (vars) => {
         const fn = api[method] as unknown as Unary;
-        return unwrap(await fn(vars as unknown)) as DataOf<TApi[K]>;
+        return unwrapResult(await fn(vars as unknown)) as DataOf<TApi[K]>;
       },
     });
   }
@@ -113,7 +101,7 @@ export function createTytheHooks<TApi extends object>(api: TApi): TytheHooks<TAp
   ): UseTytheSubscriptionResult {
     const { enabled = true, onEvent, onOpen, onClose, onError } = options;
     const [status, setStatus] = useState<SubscriptionStatus>("idle");
-    const [error, setError] = useState<unknown>(null);
+    const [errorState, setError] = useState<unknown>(null);
 
     // Latest callbacks held in a ref so an inline `onEvent={(e) => ...}` doesn't
     // tear down the stream every render.
@@ -145,11 +133,11 @@ export function createTytheHooks<TApi extends object>(api: TApi): TytheHooks<TAp
           if (controller.signal.aborted) return;
           setStatus("closed");
           cb.current.onClose?.();
-        } catch (err) {
+        } catch (error) {
           if (controller.signal.aborted) return;
-          setError(err);
+          setError(error);
           setStatus("error");
-          cb.current.onError?.(err);
+          cb.current.onError?.(error);
         }
       })();
 
@@ -157,7 +145,7 @@ export function createTytheHooks<TApi extends object>(api: TApi): TytheHooks<TAp
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [enabled, method, argsKey]);
 
-    return { status, error };
+    return { status, error: errorState };
   }
 
   return { useQuery, useMutation, useSubscription };

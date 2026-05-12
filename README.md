@@ -17,8 +17,6 @@ ceremony. No "wait, did I run the codegen?"
 
 </div>
 
----
-
 ## The problem (or: why I built this)
 
 I've been constantly facing this issue. You probably have too.
@@ -129,6 +127,30 @@ async def get_post(post_id: int) -> Post: ...
 That's it. No `class XRequest(BaseModel)` declared in another file. No
 second trip through OpenAPI. No build step you have to remember.
 
+## What you actually get
+
+A small toolbox of bottom-level primitives. Each is type-level — the codegen
+sees it and the TS side reflects it. Full surface in
+[`docs/reference.md`](./docs/reference.md).
+
+| Primitive                                                      | What it does                                                                                 |
+| -------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `@app.{get,post,put,patch,delete}`                             | Route decorators. Param locations inferred from the path template and type shape.            |
+| `Annotated[T, Query/Header/Cookie/Path]`                       | Explicit parameter location markers when inference isn't enough.                             |
+| `Annotated[list[T], Query()]`                                  | List-valued query params (`?tag=a&tag=b`).                                                   |
+| `Annotated[T, Body()]`                                         | JSON body (single or embedded multi-field).                                                  |
+| `Annotated[T, Form()]`                                         | Form bodies — `application/x-www-form-urlencoded` or multipart.                              |
+| `Annotated[UploadFile, File()]`                                | Multipart file uploads.                                                                      |
+| `Bytes`                                                        | Raw request / response bodies (webhooks, downloads). Skips the JSON envelope.                |
+| `stream[T]`                                                    | Typed Server-Sent Events. `T` is usually a tagged union; the client gets `AsyncIterable<T>`. |
+| `@raises(E1, E2, …)`                                           | Declared typed errors → `Result<T, E1 \| E2>` on the TS side. Discriminated on `kind`.       |
+| `Context` (`ctx.set_status / set_header / set_cookie / after`) | Shape the response without dropping to Starlette.                                            |
+| `Depends(provider)`                                            | FastAPI-shape dependency injection. Plain / async / generator providers.                     |
+| `after(fn, *args, **kw)`                                       | Run a callback after the response is sent. Free function or `ctx.after(...)`.                |
+| `tythe.otel.instrument(app)`                                   | One OpenTelemetry span per request. Optional extra: `tythe[otel]`.                           |
+| `tythe.tasks.InMemoryBackend`                                  | Pluggable background-job queue. Redis / SQS adapters as separate packages.                   |
+| `tythe openapi / swift / kotlin` (CLI)                         | Emit OpenAPI 3.1, Swift, or Kotlin clients off the same IR.                                  |
+
 ## How does it compare?
 
 |                        | **Tythe**                               | FastAPI + openapi-typescript | tRPC          | Encore.ts          | Connect-RPC              |
@@ -180,9 +202,56 @@ streaming workload does (LLM tokens are just typed events on an SSE stream),
 but Tythe **does not ship LLM-specific types or adapters**. Bring your own
 OpenAI / Anthropic / Pydantic AI / LangChain code; Tythe carries the wire.
 
+## Philosophy
+
+Tythe is intentionally a **low-level library**. Every primitive it ships
+maps onto an HTTP, SSE, or JSON-Schema concept — nothing higher. There
+is no `Cached[T]`, no `RateLimited[T]`, no `Auth[T]`, no page-based
+routing, no ORM glue, no LLM types in core, no matter how often any of
+those gets asked for. Those are **opinions**, and opinions belong on
+top, not inside.
+
+The contract we keep:
+
+- **The function signature is the contract.** No DTO files. No OpenAPI
+  round-trip. No `class XRequest(BaseModel)` floating in a `schemas/`
+  folder.
+- **Codegen is visible exactly once per save.** `tythe dev` rewrites
+  `client.ts` atomically. You never run a separate `generate` step.
+- **The wire stays HTTP.** JSON + SSE + multipart. No custom protocol.
+  Nothing a curl debugger can't read.
+
+## What to expect next
+
+- **Maintenance.** Bug fixes, dependency updates, security patches,
+  and integrity of the IR / wire format are the steady commitment.
+  This is the part that matters: you should be able to pin a version
+  and have it keep working.
+- **New primitives, when they earn it.** When a single bottom-level
+  piece keeps showing up across real apps — like `Bytes`, `after(...)`,
+  `set_cookie`, list query params — it lands in core. Anything that
+  carries opinion stays out.
+- **Meta-frameworks on top.** File-based routing, monorepo scaffolds,
+  multi-tenant conventions, AI-app templates, and similar opinion
+  layers are exactly what a **meta-framework** should provide.
+  Tythe itself stays unopinionated; someone — possibly us, in a
+  separate package (`tythe-kit` or whatever shape it takes) — can
+  build a Next.js-flavoured experience on top. The IR is deliberately
+  designed to make that possible: read it, scan the file tree, emit
+  routes. Everything Tythe knows about your handlers is available to
+  consumers of the IR.
+
+If you'd like to build a meta-framework on top, the IR module
+(`tythe.ir`) and the CLI surface (`tythe codegen`, `tythe openapi`,
+`tythe swift`, `tythe kotlin`) are stable entry points. The OpenAPI
+exporter is itself an example of consuming the IR to produce a
+secondary artifact.
+
 ## Status
 
-Tythe is pre-1.0. Things will move. Pin exact versions.
+Tythe is pre-1.0. The surface area documented in
+[`docs/reference.md`](./docs/reference.md) is what we commit to keeping
+stable in shape; the internals may move. Pin exact versions until 1.0.
 
 I'm dogfooding this on real projects and shipping changes weekly. If you
 want to follow along, watch the repo and read [ROADMAP.md](./ROADMAP.md).

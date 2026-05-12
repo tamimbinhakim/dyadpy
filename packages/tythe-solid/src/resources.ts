@@ -1,3 +1,4 @@
+import { unwrapResult } from "@tythe/ts";
 import { createEffect, createResource, createSignal, onCleanup } from "solid-js";
 import type { Accessor, ResourceReturn } from "solid-js";
 
@@ -5,25 +6,6 @@ import type { ArgsOf, DataOf, ErrorOf, StreamItemOf, StreamKeys, UnaryKeys } fro
 
 type Unary = (args?: unknown, opts?: { signal?: AbortSignal }) => Promise<unknown>;
 type Stream = (args?: unknown, opts?: { signal?: AbortSignal }) => AsyncIterable<unknown>;
-interface Envelope {
-  ok: boolean;
-  data?: unknown;
-  error?: unknown;
-}
-
-function unwrap(value: unknown): unknown {
-  if (value === null || typeof value !== "object") {
-    return value;
-  }
-  const e = value as Envelope;
-  if (typeof e.ok !== "boolean" || (!("data" in e) && !("error" in e))) {
-    return value;
-  }
-  if (e.ok) {
-    return e.data;
-  }
-  throw e.error;
-}
 
 export type QueryResource<TData, TError> = ResourceReturn<TData> & {
   error: Accessor<TError | undefined>;
@@ -61,11 +43,11 @@ export interface TytheResources<TApi> {
 
 export function createTytheResources<TApi extends object>(api: TApi): TytheResources<TApi> {
   function query<K extends UnaryKeys<TApi>>(method: K, args: () => ArgsOf<TApi[K]>) {
-    const [error, setError] = createSignal<ErrorOf<TApi[K]> | undefined>(undefined);
+    const [errorSignal, setError] = createSignal<ErrorOf<TApi[K]> | undefined>(undefined);
     const resource = createResource<DataOf<TApi[K]>, ArgsOf<TApi[K]>>(args, async (a) => {
       const fn = api[method] as unknown as Unary;
       try {
-        const data = unwrap(await fn(a as unknown)) as DataOf<TApi[K]>;
+        const data = unwrapResult(await fn(a as unknown)) as DataOf<TApi[K]>;
         setError(() => undefined);
         return data;
       } catch (error) {
@@ -73,12 +55,15 @@ export function createTytheResources<TApi extends object>(api: TApi): TytheResou
         throw error;
       }
     });
-    return Object.assign(resource, { error }) as QueryResource<DataOf<TApi[K]>, ErrorOf<TApi[K]>>;
+    return Object.assign(resource, { error: errorSignal }) as QueryResource<
+      DataOf<TApi[K]>,
+      ErrorOf<TApi[K]>
+    >;
   }
 
   function mutation<K extends UnaryKeys<TApi>>(method: K) {
     const [data, setData] = createSignal<DataOf<TApi[K]> | undefined>(undefined);
-    const [error, setError] = createSignal<ErrorOf<TApi[K]> | undefined>(undefined);
+    const [errorSignal, setError] = createSignal<ErrorOf<TApi[K]> | undefined>(undefined);
     const [loading, setLoading] = createSignal(false);
 
     async function mutate(args: ArgsOf<TApi[K]>): Promise<DataOf<TApi[K]>> {
@@ -86,7 +71,7 @@ export function createTytheResources<TApi extends object>(api: TApi): TytheResou
       setError(() => undefined);
       try {
         const fn = api[method] as unknown as Unary;
-        const result = unwrap(await fn(args as unknown)) as DataOf<TApi[K]>;
+        const result = unwrapResult(await fn(args as unknown)) as DataOf<TApi[K]>;
         setData(() => result);
         return result;
       } catch (error) {
@@ -103,7 +88,7 @@ export function createTytheResources<TApi extends object>(api: TApi): TytheResou
       setLoading(false);
     }
 
-    return { data, error, loading, mutate, reset };
+    return { data, error: errorSignal, loading, mutate, reset };
   }
 
   function subscription<K extends StreamKeys<TApi>>(
@@ -114,7 +99,7 @@ export function createTytheResources<TApi extends object>(api: TApi): TytheResou
     const [status, setStatus] = createSignal<"idle" | "connecting" | "open" | "closed" | "error">(
       "idle",
     );
-    const [error, setError] = createSignal<unknown>(undefined);
+    const [errorSignal, setError] = createSignal<unknown>(undefined);
 
     createEffect(() => {
       const a = args();
@@ -138,7 +123,9 @@ export function createTytheResources<TApi extends object>(api: TApi): TytheResou
           }
           setStatus("closed");
         } catch (error) {
-          if (controller.signal.aborted) return;
+          if (controller.signal.aborted) {
+            return;
+          }
           setError(() => error);
           setStatus("error");
         }
@@ -147,7 +134,7 @@ export function createTytheResources<TApi extends object>(api: TApi): TytheResou
       onCleanup(() => controller.abort());
     });
 
-    return { error, status };
+    return { error: errorSignal, status };
   }
 
   return { mutation, query, subscription };

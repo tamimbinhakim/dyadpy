@@ -30,13 +30,13 @@ function buildRequest(
   baseUrl: string,
   defaultHeaders: Record<string, string> | undefined,
 ): { url: string; init: RequestInit } {
-  let path = route.path;
+  let { path } = route;
   const query = new URLSearchParams();
   const headers: Record<string, string> = { ...defaultHeaders, ...opts.headers };
 
   const bodyEmbed: Record<string, unknown> = {};
   let bodyWhole: unknown;
-  let bodyMode: "none" | "json" | "multipart" = "none";
+  let bodyMode: "none" | "json" | "multipart" | "binary" | "form" = "none";
   let multipart: FormData | null = null;
 
   for (const p of route.params ?? []) {
@@ -48,7 +48,10 @@ function buildRequest(
         break;
       }
       case "query": {
-        query.append(p.alias, String(v));
+        // Arrays expand to repeated keys: ?tag=a&tag=b. Servers using
+        // request.query_params.getlist(...) recover the list.
+        if (Array.isArray(v)) for (const item of v) query.append(p.alias, String(item));
+        else query.append(p.alias, String(v));
         break;
       }
       case "header": {
@@ -58,7 +61,7 @@ function buildRequest(
       case "cookie": {
         // Browsers won't let JS set Cookie directly — userland can override.
         const prev = headers["cookie"];
-        headers["cookie"] = (prev ? `${prev}; ` : "") + `${p.alias}=${String(v)}`;
+        headers["cookie"] = `${prev ? `${prev}; ` : ""}${p.alias}=${String(v)}`;
         break;
       }
       case "file": {
@@ -68,9 +71,20 @@ function buildRequest(
         break;
       }
       case "body": {
-        if (p.embed) bodyEmbed[p.alias] = v;
-        else bodyWhole = v;
-        if (bodyMode === "none") bodyMode = "json";
+        if (route.binaryBody) {
+          // Raw-bytes body — pass the value through unchanged.
+          bodyWhole = v;
+          bodyMode = "binary";
+        } else if (route.formBody) {
+          bodyWhole = v;
+          bodyMode = "form";
+        } else if (p.embed) {
+          bodyEmbed[p.alias] = v;
+          if (bodyMode === "none") bodyMode = "json";
+        } else {
+          bodyWhole = v;
+          if (bodyMode === "none") bodyMode = "json";
+        }
         break;
       }
     }
@@ -86,6 +100,19 @@ function buildRequest(
     // Let fetch set the multipart boundary; we must NOT pin content-type.
     delete headers["content-type"];
     body = multipart;
+  } else if (bodyMode === "binary") {
+    headers["content-type"] ??= "application/octet-stream";
+    body = bodyWhole as BodyInit;
+  } else if (bodyMode === "form") {
+    headers["content-type"] ??= "application/x-www-form-urlencoded";
+    const form = new URLSearchParams();
+    const payload = camelToSnakeDeep(bodyWhole) as Record<string, unknown>;
+    for (const [k, val] of Object.entries(payload)) {
+      if (val === undefined || val === null) continue;
+      if (Array.isArray(val)) for (const item of val) form.append(k, String(item));
+      else form.append(k, String(val));
+    }
+    body = form.toString();
   }
 
   const qs = query.toString();
@@ -103,6 +130,11 @@ async function unaryCall(
 ): Promise<unknown> {
   const res = await fetchImpl(url, init);
   if (!res.ok) throw await httpError(res);
+
+  if (route.binaryResponse) {
+    // Server marked the route as raw bytes — hand back a Blob, skip JSON parsing.
+    return await res.blob();
+  }
 
   const ct = res.headers.get("content-type") ?? "";
   if (ct.includes("application/json")) {
@@ -180,7 +212,7 @@ function camelToSnake(s: string): string {
 
 function isPlainObject(x: unknown): x is Record<string, unknown> {
   return (
-    !!x &&
+    Boolean(x) &&
     typeof x === "object" &&
     (Object.getPrototypeOf(x) === Object.prototype || Object.getPrototypeOf(x) === null)
   );

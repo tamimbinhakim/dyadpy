@@ -182,12 +182,88 @@ if (result.ok) {
 }
 ```
 
+## 7. More primitives
+
+Once the basics click, you have a small toolbox of bottom-level pieces
+to reach for. Each is documented with examples in the
+[reference](./reference.md); short version below.
+
+### Raw bodies — `Bytes`
+
+```python
+from tythe import Bytes
+
+@app.post("/webhooks/stripe")
+async def stripe(body: Bytes, sig: Annotated[str, Header("stripe-signature")]) -> None:
+    verify(body, sig)
+
+@app.get("/exports/{id}.csv")
+async def csv(id: str) -> Bytes:
+    return render_csv(id)
+```
+
+TS side: `Blob | Uint8Array | ArrayBuffer` in, `Blob` out. No JSON envelope.
+
+### HTML forms — `Annotated[T, Form()]`
+
+```python
+from tythe import Form
+
+class LoginForm(msgspec.Struct):
+    email: str
+    password: str
+
+@app.post("/login")
+async def login(form: Annotated[LoginForm, Form()]) -> Session: ...
+```
+
+Wire: `application/x-www-form-urlencoded` (or multipart with files).
+
+### Response control — `Context`
+
+```python
+from tythe import Context
+
+@app.post("/issues")
+async def create(data: CreateIssue, ctx: Context) -> Issue:
+    issue = save(data)
+    ctx.set_status(201)
+    ctx.set_header("location", f"/issues/{issue.id}")
+    ctx.set_cookie("session", token, max_age=86400, http_only=True, secure=True)
+    return issue
+```
+
+### After-response hooks — `after()`
+
+```python
+from tythe import after
+
+@app.post("/posts")
+async def create_post(data: CreatePost) -> Post:
+    post = save(data)
+    after(notify_webhook, post.id)  # runs after the response is sent
+    return post
+```
+
+Errors swallowed (response is already gone). Sync + async both supported.
+
+### List-valued query — `Annotated[list[T], Query()]`
+
+```python
+@app.get("/issues")
+async def list_issues(
+    tag: Annotated[list[str], Query()] = None,  # ?tag=bug&tag=ui → ["bug", "ui"]
+) -> Page: ...
+```
+
 ## Where to go next
 
+- [Reference](./reference.md) — every primitive in one page.
 - [Architecture](./architecture.md) — what's actually happening under
   the hood.
 - [Design](./design.md) — why msgspec, why SSE, why no OpenAPI by
   default, why no vertical integrations in core.
+- [`docs/auth.md`](./auth.md) — auth recipes (JWT, sessions, NextAuth).
 - [`examples/`](../examples) — runnable starter projects.
 
 ## Troubleshooting

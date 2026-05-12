@@ -3,6 +3,7 @@
 
 export { createClient } from "./client.js";
 export { parseSSE } from "./sse.js";
+export { unwrapResult } from "./types.js";
 export type {
   CallOptions,
   ClientConfig,

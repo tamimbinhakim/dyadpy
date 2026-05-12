@@ -1,3 +1,4 @@
+import { unwrapResult } from "@tythe/ts";
 import { readable, writable } from "svelte/store";
 import type { Readable, Writable } from "svelte/store";
 
@@ -5,25 +6,6 @@ import type { ArgsOf, DataOf, ErrorOf, StreamItemOf, StreamKeys, UnaryKeys } fro
 
 type Unary = (args?: unknown, opts?: { signal?: AbortSignal }) => Promise<unknown>;
 type Stream = (args?: unknown, opts?: { signal?: AbortSignal }) => AsyncIterable<unknown>;
-interface Envelope {
-  ok: boolean;
-  data?: unknown;
-  error?: unknown;
-}
-
-function unwrap(value: unknown): unknown {
-  if (value === null || typeof value !== "object") {
-    return value;
-  }
-  const e = value as Envelope;
-  if (typeof e.ok !== "boolean" || (!("data" in e) && !("error" in e))) {
-    return value;
-  }
-  if (e.ok) {
-    return e.data;
-  }
-  throw e.error;
-}
 
 export interface QueryStoreOptions {
   enabled?: boolean;
@@ -92,7 +74,7 @@ export function createTytheStores<TApi extends object>(api: TApi): TytheStores<T
       const { signal } = controller;
       void (async () => {
         try {
-          const data = unwrap(await fn(args as unknown, { signal })) as DataOf<TApi[K]>;
+          const data = unwrapResult(await fn(args as unknown, { signal })) as DataOf<TApi[K]>;
           inner.update((s) => ({ ...s, data, error: undefined, status: "success" }));
         } catch (error) {
           if ((error as { name?: string })?.name === "AbortError") {
@@ -119,19 +101,19 @@ export function createTytheStores<TApi extends object>(api: TApi): TytheStores<T
       data: undefined,
       error: undefined,
       mutate: async (vars: ArgsOf<TApi[K]>) => {
-        inner.update((s) => ({ ...s, status: "loading", error: undefined }));
+        inner.update((s) => ({ ...s, error: undefined, status: "loading" }));
         const fn = api[method] as unknown as Unary;
         try {
-          const data = unwrap(await fn(vars as unknown)) as DataOf<TApi[K]>;
-          inner.update((s) => ({ ...s, status: "success", data }));
+          const data = unwrapResult(await fn(vars as unknown)) as DataOf<TApi[K]>;
+          inner.update((s) => ({ ...s, data, status: "success" }));
           return data;
-        } catch (err) {
+        } catch (error) {
           inner.update((s) => ({
             ...s,
+            error: error as ErrorOf<TApi[K]>,
             status: "error",
-            error: err as ErrorOf<TApi[K]>,
           }));
-          throw err;
+          throw error;
         }
       },
       reset: () =>
@@ -139,7 +121,7 @@ export function createTytheStores<TApi extends object>(api: TApi): TytheStores<T
           status: "idle",
           data: undefined,
           error: undefined,
-          // re-bind mutate / reset on reset
+          // Re-bind mutate / reset on reset
           mutate: getStore().mutate,
           reset: getStore().reset,
         }),
@@ -185,8 +167,10 @@ export function createTytheStores<TApi extends object>(api: TApi): TytheStores<T
             }
             set({ error: undefined, status: "closed" });
           } catch (error) {
-            if (controller.signal.aborted) return;
-            set({ status: "error", error: error });
+            if (controller.signal.aborted) {
+              return;
+            }
+            set({ error, status: "error" });
           }
         })();
         return () => controller.abort();

@@ -3,12 +3,14 @@ import { ResultNarrowing } from "./pages/01-result-narrowing.tsx";
 import { ExhaustiveSwitch } from "./pages/02-exhaustive-switch.tsx";
 import { EnumConsts } from "./pages/03-enum-consts.tsx";
 import { NamespaceContract } from "./pages/04-namespace-contract.tsx";
+import { VsFastapi } from "./pages/05-vs-fastapi.tsx";
 
 const PAGES = [
   { slug: "result", label: "Result narrowing", Component: ResultNarrowing },
   { slug: "exhaustive", label: "Exhaustive switch", Component: ExhaustiveSwitch },
   { slug: "enums", label: "Enum consts", Component: EnumConsts },
   { slug: "namespace", label: "Routes namespace", Component: NamespaceContract },
+  { slug: "vs-fastapi", label: "vs FastAPI", Component: VsFastapi },
 ] as const;
 
 type Slug = (typeof PAGES)[number]["slug"];
