@@ -236,7 +236,11 @@ def mount_task_routes(
 
     events.__name__ = f"events_{handler.__name__}"
     events.__qualname__ = events.__name__
-    events.__annotations__ = {"task_id": str, "return": stream[state_type]}
+    # ``state_type`` is a runtime value (parameterised generic); mypy can't
+    # treat it as a type form, so we stash it dict-side. The runtime reads
+    # ``__annotations__`` reflectively — it cares about the value, not the
+    # static type-system view.
+    events.__annotations__ = {"task_id": str, "return": stream[state_type]}  # type: ignore[valid-type]
 
     app.post(path)(submit)
     app.get(f"{path}/{{task_id}}")(status)

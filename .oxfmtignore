@@ -28,6 +28,7 @@ uv.lock
 # Handled by ruff
 **/*.py
 **/*.pyi
+**/*.toml
 
 # Misc
 .gitignore
