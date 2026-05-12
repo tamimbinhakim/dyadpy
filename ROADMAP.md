@@ -24,6 +24,9 @@ The bet: get the core loop right. Everything else is post-MVP.
 - [x] DI container compatible with FastAPI's `Depends()`
 - [x] `Bytes` for raw request/response bodies (webhooks, downloads)
 - [x] `after(fn, …)` post-response hook + `ctx.set_status` / `ctx.set_header`
+- [x] `ctx.set_cookie(…)` with `max_age`/`expires`/`path`/`domain`/`secure`/`http_only`/`same_site`
+- [x] List-valued query params (`Annotated[list[T], Query()]` → `?tag=a&tag=b`)
+- [x] `Form()` marker — `Annotated[T, Form()]` decodes urlencoded / multipart bodies
 - [x] Examples for Next.js, Vite/React, and SvelteKit
 - [x] One short hero demo: typed streaming end-to-end in **<50 lines**
 

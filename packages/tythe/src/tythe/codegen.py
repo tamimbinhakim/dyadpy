@@ -346,6 +346,8 @@ def _render_route_descriptor(route: RouteIR) -> str:
         parts.append("binaryBody: true")
     if route.binary_response:
         parts.append("binaryResponse: true")
+    if route.form_body:
+        parts.append("formBody: true")
     return "{ " + ", ".join(parts) + " }"
 
 

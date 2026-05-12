@@ -147,3 +147,142 @@ def test_set_header_lands_on_response() -> None:
     r = client.post("/create")
     assert r.headers["location"] == "/items/7"
     assert r.headers["x-request-id"] == "abc-123"
+
+
+# ----------------------- list query params ----------------------- #
+
+
+def test_list_query_param_collects_repeats() -> None:
+    from tythe.params import Query
+
+    app = App()
+
+    @app.get("/search")
+    async def search(
+        tag: Annotated[list[str], Query()] = None,  # type: ignore[assignment]  # noqa: RUF013
+    ) -> dict[str, list[str]]:
+        return {"tags": tag}
+
+    client = TestClient(app)
+    r = client.get("/search?tag=bug&tag=ui")
+    assert r.status_code == 200
+    assert r.json() == {"tags": ["bug", "ui"]}
+
+
+def test_list_query_param_converts_items() -> None:
+    from tythe.params import Query
+
+    app = App()
+
+    @app.get("/ids")
+    async def ids(
+        id: Annotated[list[int], Query()] = None,  # type: ignore[assignment]  # noqa: RUF013
+    ) -> dict[str, list[int]]:
+        return {"ids": id}
+
+    client = TestClient(app)
+    r = client.get("/ids?id=1&id=2&id=42")
+    assert r.json() == {"ids": [1, 2, 42]}
+
+
+def test_list_query_param_default_when_absent() -> None:
+    from tythe.params import Query
+
+    app = App()
+
+    @app.get("/q")
+    async def q(
+        tag: Annotated[list[str], Query()] = None,  # type: ignore[assignment]  # noqa: RUF013
+    ) -> dict[str, list[str]]:
+        return {"tags": tag}
+
+    client = TestClient(app)
+    r = client.get("/q")
+    assert r.json() == {"tags": []}
+
+
+# ----------------------- set_cookie ----------------------- #
+
+
+def test_set_cookie_emits_set_cookie_header() -> None:
+    app = App()
+
+    @app.post("/login")
+    async def login(ctx: Context) -> dict[str, bool]:
+        ctx.set_cookie("session", "abc.def.ghi", max_age=3600, http_only=True, secure=True)
+        return {"ok": True}
+
+    client = TestClient(app)
+    r = client.post("/login")
+    set_cookie = r.headers["set-cookie"]
+    assert "session=abc.def.ghi" in set_cookie
+    assert "Max-Age=3600" in set_cookie
+    assert "HttpOnly" in set_cookie
+    assert "Secure" in set_cookie
+
+
+def test_set_cookie_multiple() -> None:
+    app = App()
+
+    @app.post("/multi")
+    async def multi(ctx: Context) -> dict[str, bool]:
+        ctx.set_cookie("a", "1")
+        ctx.set_cookie("b", "2")
+        return {"ok": True}
+
+    client = TestClient(app)
+    r = client.post("/multi")
+    # Starlette sends one Set-Cookie header per call; httpx merges them with comma.
+    raw = r.headers.get_list("set-cookie")
+    joined = "\n".join(raw)
+    assert "a=1" in joined
+    assert "b=2" in joined
+
+
+# ----------------------- Form[T] ----------------------- #
+
+
+def test_form_body_decodes_urlencoded() -> None:
+    import msgspec
+
+    from tythe import Form
+
+    class LoginForm(msgspec.Struct):
+        email: str
+        password: str
+        remember_me: bool = False
+
+    app = App()
+
+    @app.post("/login")
+    async def login(form: Annotated[LoginForm, Form()]) -> dict[str, object]:
+        return {"email": form.email, "remember": form.remember_me}
+
+    client = TestClient(app)
+    r = client.post(
+        "/login",
+        data={"email": "a@b.co", "password": "hunter2", "remember_me": "true"},
+    )
+    assert r.status_code == 200
+    assert r.json() == {"email": "a@b.co", "remember": True}
+
+
+def test_form_body_marked_in_ir_and_codegen() -> None:
+    import msgspec
+
+    from tythe import Form
+
+    class LoginForm(msgspec.Struct):
+        email: str
+        password: str
+
+    app = App()
+
+    @app.post("/login")
+    async def login(form: Annotated[LoginForm, Form()]) -> dict[str, str]:
+        return {"email": form.email}
+
+    ir = build_ir(app)
+    assert ir.routes[0].form_body is True
+    out = render(ir)
+    assert "formBody: true" in out

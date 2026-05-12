@@ -21,6 +21,8 @@ export interface RouteDescriptor {
   binaryBody?: boolean;
   /** Response is raw bytes — decode with `res.blob()` instead of `res.json()`. */
   binaryResponse?: boolean;
+  /** Body is application/x-www-form-urlencoded (or multipart/form-data when files present). */
+  formBody?: boolean;
 }
 
 export interface ClientConfig {

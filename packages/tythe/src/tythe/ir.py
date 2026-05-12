@@ -61,6 +61,7 @@ class RouteIR:
     raises: list[ErrorIR]
     binary_body: bool = False  # body is raw bytes (skip JSON envelope)
     binary_response: bool = False  # response is raw bytes (decode as Blob on TS side)
+    form_body: bool = False  # body is application/x-www-form-urlencoded / multipart
 
 
 @dataclass(slots=True)
@@ -154,6 +155,7 @@ def build_ir(app: App) -> AppIR:
         raises_ir: list[ErrorIR] = []
         binary_body = False
         binary_response = plan.return_annotation is bytes
+        form_body = any(p.is_form for p in plan.params)
 
         for slot_idx, (kind, slot_r_idx, payload) in enumerate(slots):
             if slot_r_idx != r_idx:
@@ -199,6 +201,7 @@ def build_ir(app: App) -> AppIR:
                 raises=raises_ir,
                 binary_body=binary_body,
                 binary_response=binary_response,
+                form_body=form_body,
             ),
         )
 

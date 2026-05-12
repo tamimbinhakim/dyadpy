@@ -9,6 +9,7 @@ from __future__ import annotations
 from tythe.app import App
 from tythe.context import Context, Depends, after
 from tythe.errors import raises
+from tythe.params import Form
 from tythe.streaming import stream
 from tythe.tasks import InMemoryBackend, TaskBackend, TaskState
 
@@ -22,6 +23,7 @@ __all__ = [
     "Bytes",
     "Context",
     "Depends",
+    "Form",
     "InMemoryBackend",
     "TaskBackend",
     "TaskState",

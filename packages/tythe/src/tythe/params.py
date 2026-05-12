@@ -12,6 +12,14 @@ parameter lives on the wire:
 
 If no marker is given, Tythe infers: path-template names → ``Path``, structural
 types (Struct/dataclass/TypedDict) → ``Body``, everything else → ``Query``.
+
+For HTML form submissions add the ``Form()`` marker to the body annotation:
+
+    @app.post("/login")
+    async def login(form: Annotated[LoginForm, Form()]) -> Session: ...
+
+The handler receives a ``LoginForm`` instance; the wire is
+``application/x-www-form-urlencoded`` or ``multipart/form-data``.
 """
 
 from __future__ import annotations
@@ -23,10 +31,12 @@ from starlette.datastructures import UploadFile
 
 ParamLocation = Literal["path", "query", "body", "header", "cookie", "file"]
 
+
 __all__ = [
     "Body",
     "Cookie",
     "File",
+    "Form",
     "Header",
     "ParamLocation",
     "Path",
@@ -70,6 +80,16 @@ class File(Marker):
     pass
 
 
+@dataclass(slots=True, frozen=True)
+class Form(Marker):
+    """Body is form-encoded (urlencoded or multipart), not JSON.
+
+    Use as ``Annotated[T, Form()]`` on a body param. The handler receives a
+    ``T`` (msgspec.Struct, dataclass, or Pydantic model); the wire is
+    ``application/x-www-form-urlencoded`` or ``multipart/form-data``.
+    """
+
+
 _LOCATIONS: dict[type[Marker], ParamLocation] = {
     Body: "body",
     Query: "query",
@@ -77,6 +97,7 @@ _LOCATIONS: dict[type[Marker], ParamLocation] = {
     Header: "header",
     Cookie: "cookie",
     File: "file",
+    Form: "body",
 }
 
 

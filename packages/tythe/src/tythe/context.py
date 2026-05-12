@@ -6,7 +6,8 @@ import contextvars
 import inspect
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, TypeVar, overload
+from datetime import datetime
+from typing import TYPE_CHECKING, Any, Literal, TypeVar, overload
 
 if TYPE_CHECKING:
     from starlette.requests import Request
@@ -14,6 +15,22 @@ if TYPE_CHECKING:
 T = TypeVar("T")
 
 AfterCallback = tuple[Callable[..., Any], tuple[Any, ...], dict[str, Any]]
+SameSite = Literal["lax", "strict", "none"]
+
+
+@dataclass(slots=True)
+class CookieSpec:
+    """A Set-Cookie header spec collected by ``ctx.set_cookie``."""
+
+    name: str
+    value: str
+    max_age: int | None = None
+    expires: int | datetime | str | None = None
+    path: str = "/"
+    domain: str | None = None
+    secure: bool = False
+    http_only: bool = False
+    same_site: SameSite | None = "lax"
 
 
 def _empty_headers() -> dict[str, str]:
@@ -21,6 +38,10 @@ def _empty_headers() -> dict[str, str]:
 
 
 def _empty_callbacks() -> list[AfterCallback]:
+    return []
+
+
+def _empty_cookies() -> list[CookieSpec]:
     return []
 
 
@@ -38,6 +59,7 @@ class Context:
     user: Any | None = None
     response_status: int | None = None
     response_headers: dict[str, str] = field(default_factory=_empty_headers)
+    response_cookies: list[CookieSpec] = field(default_factory=_empty_cookies)
     after_callbacks: list[AfterCallback] = field(default_factory=_empty_callbacks)
 
     @property
@@ -58,6 +80,40 @@ class Context:
     def set_header(self, name: str, value: str) -> None:
         """Add or replace a response header."""
         self.response_headers[name] = value
+
+    def set_cookie(
+        self,
+        name: str,
+        value: str,
+        *,
+        max_age: int | None = None,
+        expires: int | datetime | str | None = None,
+        path: str = "/",
+        domain: str | None = None,
+        secure: bool = False,
+        http_only: bool = False,
+        same_site: SameSite | None = "lax",
+    ) -> None:
+        """Queue a Set-Cookie header on the response.
+
+        Multiple calls produce multiple Set-Cookie headers (which is the only
+        way a browser accepts more than one cookie per response). Defaults
+        match what a session cookie usually wants: ``path="/"``, ``same_site="lax"``.
+        Set ``secure=True`` and ``http_only=True`` for anything carrying auth state.
+        """
+        self.response_cookies.append(
+            CookieSpec(
+                name=name,
+                value=value,
+                max_age=max_age,
+                expires=expires,
+                path=path,
+                domain=domain,
+                secure=secure,
+                http_only=http_only,
+                same_site=same_site,
+            ),
+        )
 
     def after(self, fn: Callable[..., Any], *args: Any, **kwargs: Any) -> None:
         """Run ``fn`` after the response is sent. Equivalent to free ``tythe.after``."""

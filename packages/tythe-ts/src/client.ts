@@ -36,7 +36,7 @@ function buildRequest(
 
   const bodyEmbed: Record<string, unknown> = {};
   let bodyWhole: unknown;
-  let bodyMode: "none" | "json" | "multipart" | "binary" = "none";
+  let bodyMode: "none" | "json" | "multipart" | "binary" | "form" = "none";
   let multipart: FormData | null = null;
 
   for (const p of route.params ?? []) {
@@ -48,7 +48,10 @@ function buildRequest(
         break;
       }
       case "query": {
-        query.append(p.alias, String(v));
+        // Arrays expand to repeated keys: ?tag=a&tag=b. Servers using
+        // request.query_params.getlist(...) recover the list.
+        if (Array.isArray(v)) for (const item of v) query.append(p.alias, String(item));
+        else query.append(p.alias, String(v));
         break;
       }
       case "header": {
@@ -72,6 +75,9 @@ function buildRequest(
           // Raw-bytes body — pass the value through unchanged.
           bodyWhole = v;
           bodyMode = "binary";
+        } else if (route.formBody) {
+          bodyWhole = v;
+          bodyMode = "form";
         } else if (p.embed) {
           bodyEmbed[p.alias] = v;
           if (bodyMode === "none") bodyMode = "json";
@@ -97,6 +103,16 @@ function buildRequest(
   } else if (bodyMode === "binary") {
     headers["content-type"] ??= "application/octet-stream";
     body = bodyWhole as BodyInit;
+  } else if (bodyMode === "form") {
+    headers["content-type"] ??= "application/x-www-form-urlencoded";
+    const form = new URLSearchParams();
+    const payload = camelToSnakeDeep(bodyWhole) as Record<string, unknown>;
+    for (const [k, val] of Object.entries(payload)) {
+      if (val === undefined || val === null) continue;
+      if (Array.isArray(val)) for (const item of val) form.append(k, String(item));
+      else form.append(k, String(val));
+    }
+    body = form.toString();
   }
 
   const qs = query.toString();
