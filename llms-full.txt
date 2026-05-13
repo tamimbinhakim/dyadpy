@@ -1,0 +1,1849 @@
+# Tythe — Full Documentation
+
+This file is a single-document concatenation of every essential doc in
+the Tythe repository, structured for consumption by large-context
+language models. The canonical source for each section is linked at the
+section header; if anything here contradicts the canonical file, the
+canonical file wins.
+
+Sections:
+
+1. README
+2. Getting started
+3. Reference
+4. Architecture
+5. Design
+6. Auth recipes
+7. IR stability policy
+8. Semver policy
+9. LTS policy
+
+---
+
+## 1. README
+
+_Source: [README.md](./README.md)_
+
+<div align="center">
+
+# Tythe
+
+_pronounced **"tythe"** — rhymes with "scythe" (`/taɪð/`)_
+
+**A type-safe RPC bridge between Python and TypeScript.**
+
+The function signature is the contract. No DTOs. No OpenAPI codegen
+ceremony. No "wait, did I run the codegen?"
+
+[![CI](https://github.com/tamimbinhakim/tythe/actions/workflows/ci.yml/badge.svg)](https://github.com/tamimbinhakim/tythe/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/tythe.svg)](https://pypi.org/project/tythe/)
+[![npm](https://img.shields.io/npm/v/@tythe/ts.svg)](https://www.npmjs.com/package/@tythe/ts)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+[![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-yellow.svg)](https://conventionalcommits.org)
+
+[**Quickstart**](./docs/getting-started.md) · [**Docs**](./docs) · [**Design**](./docs/design.md) · [**Examples**](./examples)
+
+</div>
+
+## The problem (or: why I built this)
+
+I've been constantly facing this issue. You probably have too.
+
+You're building a product. The backend is in Python — because that's where
+your data, your auth, your queues, your background jobs, your team, and
+most of the actually interesting code already are. But your users live in
+a browser, and your users expect a real frontend — Next.js, Vite,
+SvelteKit, whatever — written by people who don't want to touch a Jinja
+template ever again.
+
+So you do the dance:
+
+1. Define a Pydantic model `class CreatePostRequest(BaseModel): ...`
+2. Reference it from a FastAPI handler
+3. Mount `/openapi.json`
+4. Run `openapi-typescript` or `@hey-api/openapi-ts` or Orval or Kubb
+5. Get back a generated client where your endpoint is now called
+   `createPostPostsPost` and your body type is `Body_create_post_posts_post`
+6. Wrap it in a hand-written hook because nobody wants
+   `createPostPostsPost` in their JSX
+7. Forget to re-run the codegen
+8. Ship a bug
+
+That's the boring case. Then you need to **stream** something — server
+push, progress events, partial updates, log lines — and OpenAPI doesn't
+really have an answer. You're hand-parsing `data:` lines in a `fetch` body
+reader and casting `any`.
+
+I kept hitting this. Every project. Every team I talked to was hitting it.
+None of the existing options — not tRPC (TypeScript-only), not Connect-RPC
+(`.proto` files as source of truth), not Reflex (hides JS) — actually
+solved the underlying problem at the right level of abstraction.
+
+So: **Tythe**.
+
+## What Tythe is
+
+A thin, opinionated ASGI framework plus a tiny watcher. Your Python
+function signature is the contract. At server start, Tythe reads your
+types with `inspect` + `typing.get_type_hints`, normalizes them through
+`msgspec`'s native JSON Schema export, and writes a single `client.ts`
+straight into your frontend.
+
+Then you do this on the TS side:
+
+```ts
+import { api } from "@/lib/tythe/client";
+
+const user = await api.getUser({ userId: 1 });
+
+for await (const ev of api.subscribeEvents({ topic: "orders" })) {
+  console.log(ev.kind, ev.payload);
+}
+```
+
+…and that's the whole API surface you have to learn. `api.getUser` is
+a Proxy, the types come straight from the generated `.d.ts`, and the
+editor gives you autocomplete + inline errors the same way tRPC does —
+except your backend is Python.
+
+## Show me the Python side
+
+```python
+# server/app.py
+from tythe import App, stream, raises
+from dataclasses import dataclass
+import msgspec
+
+app = App()
+
+# Inputs are just parameters. Outputs are just return types.
+@app.get("/users/{user_id}")
+async def get_user(user_id: int) -> User:
+    return await db.get_user(user_id)
+
+# Multi-field input? Drop a Struct next to the handler. No separate DTO file.
+class CreatePost(msgspec.Struct):
+    title: str
+    body: str
+    tags: list[str] = []
+
+@app.post("/posts")
+async def create_post(data: CreatePost, ctx: Context) -> Post:
+    return await db.create_post(author_id=ctx.user.id, **msgspec.structs.asdict(data))
+
+# Streaming. Just yield typed events. The return annotation tells the
+# codegen everything it needs to know.
+class Event(msgspec.Struct, tag_field="kind"): ...
+class OrderPlaced(Event, tag="order_placed"): order_id: int
+class OrderShipped(Event, tag="order_shipped"): order_id: int; carrier: str
+
+@app.get("/events")
+async def events(topic: str) -> stream[OrderPlaced | OrderShipped]:
+    async for ev in bus.subscribe(topic):
+        yield ev
+
+# Typed errors flow to the client as a discriminated union.
+@dataclass
+class PostNotFound(Exception):
+    post_id: int
+
+@app.get("/posts/{post_id}")
+@raises(PostNotFound)
+async def get_post(post_id: int) -> Post: ...
+```
+
+That's it. No `class XRequest(BaseModel)` declared in another file. No
+second trip through OpenAPI. No build step you have to remember.
+
+## What you actually get
+
+A small toolbox of bottom-level primitives. Each is type-level — the codegen
+sees it and the TS side reflects it. Full surface in
+[`docs/reference.md`](./docs/reference.md).
+
+| Primitive                                                      | What it does                                                                                 |
+| -------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `@app.{get,post,put,patch,delete}`                             | Route decorators. Param locations inferred from the path template and type shape.            |
+| `Annotated[T, Query/Header/Cookie/Path]`                       | Explicit parameter location markers when inference isn't enough.                             |
+| `Annotated[list[T], Query()]`                                  | List-valued query params (`?tag=a&tag=b`).                                                   |
+| `Annotated[T, Body()]`                                         | JSON body (single or embedded multi-field).                                                  |
+| `Annotated[T, Form()]`                                         | Form bodies — `application/x-www-form-urlencoded` or multipart.                              |
+| `Annotated[UploadFile, File()]`                                | Multipart file uploads.                                                                      |
+| `Bytes`                                                        | Raw request / response bodies (webhooks, downloads). Skips the JSON envelope.                |
+| `stream[T]`                                                    | Typed Server-Sent Events. `T` is usually a tagged union; the client gets `AsyncIterable<T>`. |
+| `@raises(E1, E2, …)`                                           | Declared typed errors → `Result<T, E1 \| E2>` on the TS side. Discriminated on `kind`.       |
+| `Context` (`ctx.set_status / set_header / set_cookie / after`) | Shape the response without dropping to Starlette.                                            |
+| `Depends(provider)`                                            | FastAPI-shape dependency injection. Plain / async / generator providers.                     |
+| `after(fn, *args, **kw)`                                       | Run a callback after the response is sent. Free function or `ctx.after(...)`.                |
+| `tythe.otel.instrument(app)`                                   | One OpenTelemetry span per request. Optional extra: `tythe[otel]`.                           |
+| `tythe.tasks.InMemoryBackend`                                  | Pluggable background-job queue. Redis / SQS adapters as separate packages.                   |
+| `tythe openapi / swift / kotlin` (CLI)                         | Emit OpenAPI 3.1, Swift, or Kotlin clients off the same IR.                                  |
+
+## How does it compare?
+
+|                        | **Tythe**                               | FastAPI + openapi-typescript | tRPC          | Encore.ts          | Connect-RPC              |
+| ---------------------- | --------------------------------------- | ---------------------------- | ------------- | ------------------ | ------------------------ |
+| Backend lang           | **Python**                              | Python                       | TypeScript    | TS / Go            | Polyglot                 |
+| Frontend lang          | **Any TS**                              | TS                           | TS only       | TS only            | Polyglot                 |
+| DTO duplication        | **None**                                | Yes                          | None          | None               | Yes (`.proto`)           |
+| Codegen visible to dev | **`tythe dev` only**                    | Yes, explicit                | None          | Implicit           | Yes, `buf gen`           |
+| Streaming type-safe    | **Yes (typed SSE union)**               | Painful / manual             | Subscriptions | Yes                | Yes                      |
+| Typed errors → TS      | **Discriminated union**                 | HTTP codes                   | `TRPCError`   | Yes                | Yes                      |
+| Validation runtime     | msgspec (Pydantic opt-in)               | Pydantic v2                  | Zod           | Rust + JSON Schema | Protovalidate            |
+| Best for               | **Python backend + modern TS frontend** | CRUD + external clients      | TS monorepo   | TS/Go monorepo     | Cross-team microservices |
+
+[Read the full design doc →](./docs/design.md)
+
+## Quickstart (60 seconds)
+
+```bash
+# 1. Install the server
+uv add tythe
+
+# 2. Install the client runtime in your frontend
+pnpm add @tythe/ts
+
+# 3. Run it
+tythe dev
+```
+
+Tythe writes `frontend/src/lib/tythe/client.ts` on every change. Import
+it like any other file. That's the whole loop.
+
+Full walkthrough in [docs/getting-started.md](./docs/getting-started.md).
+
+## Packages
+
+| Package                                          | What it is                                                                                                                                                | Status |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| [`tythe`](./packages/tythe) (PyPI)               | The Python framework, the CLI, the codegen.                                                                                                               | v0.1   |
+| [`@tythe/ts`](./packages/tythe-ts) (npm)         | The tiny (~3 KB) framework-agnostic TS runtime your generated `client.ts` imports. Works with any frontend — Next.js, Vite, SvelteKit, Astro, plain HTML. | v0.1   |
+| [`@tythe/react`](./packages/tythe-react) (npm)   | React-specific hooks (`useQuery`, `useSubscription`, `useMutation`) on top of TanStack Query.                                                             | v0.1   |
+| [`@tythe/svelte`](./packages/tythe-svelte) (npm) | Svelte 5 store bindings (`query`, `mutation`, `subscription`).                                                                                            | v0.1   |
+| [`@tythe/solid`](./packages/tythe-solid) (npm)   | SolidJS resource bindings (`query`, `mutation`, `subscription`).                                                                                          | v0.1   |
+
+## What about AI / LLMs?
+
+Tythe ships at the fundamental level: RPC, typed streaming, typed errors,
+cancellation. AI apps benefit from those primitives the same way any other
+streaming workload does (LLM tokens are just typed events on an SSE stream),
+but Tythe **does not ship LLM-specific types or adapters**. Bring your own
+OpenAI / Anthropic / Pydantic AI / LangChain code; Tythe carries the wire.
+
+## Philosophy
+
+Tythe is intentionally a **low-level library**. Every primitive it ships
+maps onto an HTTP, SSE, or JSON-Schema concept — nothing higher. There
+is no `Cached[T]`, no `RateLimited[T]`, no `Auth[T]`, no page-based
+routing, no ORM glue, no LLM types in core, no matter how often any of
+those gets asked for. Those are **opinions**, and opinions belong on
+top, not inside.
+
+The contract we keep:
+
+- **The function signature is the contract.** No DTO files. No OpenAPI
+  round-trip. No `class XRequest(BaseModel)` floating in a `schemas/`
+  folder.
+- **Codegen is visible exactly once per save.** `tythe dev` rewrites
+  `client.ts` atomically. You never run a separate `generate` step.
+- **The wire stays HTTP.** JSON + SSE + multipart. No custom protocol.
+  Nothing a curl debugger can't read.
+
+## What to expect next
+
+- **Maintenance.** Bug fixes, dependency updates, security patches,
+  and integrity of the IR / wire format are the steady commitment.
+  This is the part that matters: you should be able to pin a version
+  and have it keep working.
+- **New primitives, when they earn it.** When a single bottom-level
+  piece keeps showing up across real apps — like `Bytes`, `after(...)`,
+  `set_cookie`, list query params — it lands in core. Anything that
+  carries opinion stays out.
+- **Meta-frameworks on top.** File-based routing, monorepo scaffolds,
+  multi-tenant conventions, AI-app templates, and similar opinion
+  layers are exactly what a **meta-framework** should provide.
+  Tythe itself stays unopinionated; someone — possibly us, in a
+  separate package (`tythe-kit` or whatever shape it takes) — can
+  build a Next.js-flavoured experience on top. The IR is deliberately
+  designed to make that possible: read it, scan the file tree, emit
+  routes. Everything Tythe knows about your handlers is available to
+  consumers of the IR.
+
+If you'd like to build a meta-framework on top, the IR module
+(`tythe.ir`) and the CLI surface (`tythe codegen`, `tythe openapi`,
+`tythe swift`, `tythe kotlin`) are stable entry points. The OpenAPI
+exporter is itself an example of consuming the IR to produce a
+secondary artifact.
+
+## Status
+
+Tythe is pre-1.0. The surface area documented in
+[`docs/reference.md`](./docs/reference.md) is what we commit to keeping
+stable in shape; the internals may move. Pin exact versions until 1.0.
+
+I'm dogfooding this on real projects and shipping changes weekly. If you
+want to follow along, watch the repo and read [ROADMAP.md](./ROADMAP.md).
+
+## Stability commitments
+
+The four pillars of the v1.0 freeze are written down, not just
+promised:
+
+- **Public API** — what we keep stable, what counts as a break, the
+  deprecation cycle: [`docs/semver.md`](./docs/semver.md).
+- **Wire format / IR** — additive-only invariants on the JSON-Schema
+  IR and the on-the-wire envelope: [`docs/ir-stability.md`](./docs/ir-stability.md).
+- **LTS** — support windows, backport policy, EOL rules:
+  [`docs/lts.md`](./docs/lts.md).
+- **Codegen output** — the generated TypeScript client is part of the
+  surface, not an implementation detail. A minor bump must not break a
+  working client.
+
+## Contributing
+
+I love PRs. I love issues that start with "I tried to do X and got
+confused" even more. Read [CONTRIBUTING.md](./CONTRIBUTING.md), be kind
+([Code of Conduct](./CODE_OF_CONDUCT.md)), and let's go.
+
+## License
+
+[MIT](./LICENSE). Use it. Fork it. Build a company on it. Just don't sue me.
+
+
+---
+
+## 2. Getting started
+
+_Source: [docs/getting-started.md](./docs/getting-started.md)_
+
+# Getting started
+
+This is the 5-minute version. Real depth lives in
+[architecture](./architecture.md) and [design](./design.md). For now:
+install, write a handler, watch a typed TS client appear, call it from
+your frontend, ship something.
+
+## What you need
+
+| Tool   | Version | Why                                          |
+| ------ | ------- | -------------------------------------------- |
+| Python | ≥ 3.11  | Tythe uses modern type-hint syntax.          |
+| Node   | ≥ 20    | For your frontend toolchain.                 |
+| `uv`   | latest  | Python package manager. `brew install uv`.   |
+| `pnpm` | ≥ 9     | Or `npm` / `yarn`, but pnpm is what I'd use. |
+
+## 1. Install
+
+In your Python project:
+
+```bash
+uv add tythe
+```
+
+In your frontend project (Next.js, Vite, SvelteKit, whatever):
+
+```bash
+pnpm add @tythe/ts
+```
+
+> The two halves talk through a generated `client.ts` file — neither
+> one needs to know where the other lives until you tell the CLI.
+
+## 2. Write your first handler
+
+Create `server/app.py`:
+
+```python
+from tythe import App
+import msgspec
+
+app = App()
+
+class CreatePost(msgspec.Struct):
+    title: str
+    body: str
+
+class Post(msgspec.Struct):
+    id: int
+    title: str
+    body: str
+
+POSTS: dict[int, Post] = {}
+
+@app.get("/posts/{post_id}")
+async def get_post(post_id: int) -> Post:
+    return POSTS[post_id]
+
+@app.post("/posts")
+async def create_post(data: CreatePost) -> Post:
+    post = Post(id=len(POSTS) + 1, title=data.title, body=data.body)
+    POSTS[post.id] = post
+    return post
+```
+
+That's the whole API contract. No `class PostRequest(BaseModel)`
+declared in another file. The handler parameters are the request
+shape; the return annotation is the response shape.
+
+## 3. Run the dev loop
+
+```bash
+tythe dev server.app:app --out ../frontend/src/lib/tythe/client.ts
+```
+
+What just happened:
+
+1. Uvicorn started on `http://127.0.0.1:8000`.
+2. The watcher scanned `server/app.py`, found your `App`, and wrote a
+   typed `client.ts` to the path you passed.
+3. Any time you save a `.py` file, the watcher reruns extraction and
+   rewrites `client.ts` atomically.
+
+You can also do a one-shot:
+
+```bash
+tythe codegen server.app:app --out ../frontend/src/lib/tythe/client.ts
+```
+
+## 4. Call it from your frontend
+
+```ts
+// frontend/src/app/page.tsx
+import { api } from "@/lib/tythe/client";
+
+const post = await api.createPost({ data: { title: "first", body: "hello" } });
+//    ^? Post
+
+const got = await api.getPost({ postId: post.id });
+console.log(got.title);
+```
+
+Open your editor. Hover over `api.createPost`. The return type is
+`Post`. The parameter type is `CreatePost`. If you pass
+`{ title: 123 }`, TypeScript yells at you before you save.
+
+That's the whole loop.
+
+## 5. Stream typed events
+
+Any handler whose return annotation is `stream[T]` becomes a
+server-sent-events endpoint. You yield instances of `T` (or a
+discriminated union of `T`s); the generated client gives you a typed
+`AsyncIterable` back.
+
+```python
+from tythe import stream
+import msgspec, asyncio
+
+class Tick(msgspec.Struct, tag="tick"):
+    seq: int
+    ts: float
+
+class Done(msgspec.Struct, tag="done"):
+    total: int
+
+@app.get("/ticks")
+async def ticks(count: int) -> stream[Tick | Done]:
+    for i in range(count):
+        await asyncio.sleep(0.5)
+        yield Tick(seq=i, ts=asyncio.get_event_loop().time())
+    yield Done(total=count)
+```
+
+On the frontend:
+
+```ts
+const ac = new AbortController();
+for await (const ev of api.ticks({ count: 10 }, { signal: ac.signal })) {
+  if (ev.kind === "tick") console.log("tick", ev.seq);
+  else if (ev.kind === "done") console.log("finished", ev.total);
+}
+```
+
+Cancellation? Pass the `AbortSignal`. The server sees the disconnect
+via `request.is_disconnected()` and stops the work.
+
+> The same primitive works for anything that pushes typed events:
+> progress streams, log tailing, pubsub, partial responses, LLM token
+> streams. Tythe doesn't care what's inside the events — it just
+> carries them with the types intact.
+
+## 6. Typed errors
+
+Declare which errors a handler can raise:
+
+```python
+from dataclasses import dataclass
+from tythe import raises
+
+@dataclass
+class PostNotFound(Exception):
+    post_id: int
+
+@app.get("/posts/{post_id}")
+@raises(PostNotFound)
+async def get_post(post_id: int) -> Post:
+    if post_id not in POSTS:
+        raise PostNotFound(post_id=post_id)
+    return POSTS[post_id]
+```
+
+On the TS side you get a `Result<Post, PostNotFound>` shape —
+TypeScript forces you to handle the typed error in a way it can check:
+
+```ts
+const result = await api.getPost({ postId: 42 });
+if (result.ok) {
+  console.log(result.data.title);
+} else if (result.error.kind === "PostNotFound") {
+  toast(`No post with id ${result.error.postId}`);
+}
+```
+
+## 7. More primitives
+
+Once the basics click, you have a small toolbox of bottom-level pieces
+to reach for. Each is documented with examples in the
+[reference](./reference.md); short version below.
+
+### Raw bodies — `Bytes`
+
+```python
+from tythe import Bytes
+
+@app.post("/webhooks/stripe")
+async def stripe(body: Bytes, sig: Annotated[str, Header("stripe-signature")]) -> None:
+    verify(body, sig)
+
+@app.get("/exports/{id}.csv")
+async def csv(id: str) -> Bytes:
+    return render_csv(id)
+```
+
+TS side: `Blob | Uint8Array | ArrayBuffer` in, `Blob` out. No JSON envelope.
+
+### HTML forms — `Annotated[T, Form()]`
+
+```python
+from tythe import Form
+
+class LoginForm(msgspec.Struct):
+    email: str
+    password: str
+
+@app.post("/login")
+async def login(form: Annotated[LoginForm, Form()]) -> Session: ...
+```
+
+Wire: `application/x-www-form-urlencoded` (or multipart with files).
+
+### Response control — `Context`
+
+```python
+from tythe import Context
+
+@app.post("/issues")
+async def create(data: CreateIssue, ctx: Context) -> Issue:
+    issue = save(data)
+    ctx.set_status(201)
+    ctx.set_header("location", f"/issues/{issue.id}")
+    ctx.set_cookie("session", token, max_age=86400, http_only=True, secure=True)
+    return issue
+```
+
+### After-response hooks — `after()`
+
+```python
+from tythe import after
+
+@app.post("/posts")
+async def create_post(data: CreatePost) -> Post:
+    post = save(data)
+    after(notify_webhook, post.id)  # runs after the response is sent
+    return post
+```
+
+Errors swallowed (response is already gone). Sync + async both supported.
+
+### List-valued query — `Annotated[list[T], Query()]`
+
+```python
+@app.get("/issues")
+async def list_issues(
+    tag: Annotated[list[str], Query()] = None,  # ?tag=bug&tag=ui → ["bug", "ui"]
+) -> Page: ...
+```
+
+## Where to go next
+
+- [Reference](./reference.md) — every primitive in one page.
+- [Architecture](./architecture.md) — what's actually happening under
+  the hood.
+- [Design](./design.md) — why msgspec, why SSE, why no OpenAPI by
+  default, why no vertical integrations in core.
+- [`docs/auth.md`](./auth.md) — auth recipes (JWT, sessions, NextAuth).
+- [`examples/`](../examples) — runnable starter projects.
+
+## Troubleshooting
+
+**The watcher says "no `App` found".**
+The argument to `tythe dev` is `module:attr`, not a path. Make sure
+`server/app.py` defines `app = App()` and that the working directory
+is the Python project root (so `server.app` is importable).
+
+**My TS types are `any`.**
+Either you're missing `@tythe/ts`, or your editor hasn't picked up
+the generated `client.ts`. Restart the TypeScript server in your
+editor.
+
+**Streaming doesn't cancel server-side.**
+Make sure your handler periodically checks
+`request.is_disconnected()` (or yields control via `await`). A tight
+CPU loop will keep running until the next await point.
+
+
+---
+
+## 3. Reference
+
+_Source: [docs/reference.md](./docs/reference.md)_
+
+# Reference
+
+Every primitive Tythe exports, what it does, and the smallest example. If a
+feature isn't here, it isn't in `tythe`.
+
+Tythe ships at the wire level: HTTP routes, body / param markers, typed
+streaming, typed errors, post-response hooks. Nothing higher-level (no
+auth, no rate-limiting, no LLM types).
+
+- [App + decorators](#app--decorators)
+- [Parameter markers (`Annotated[T, ...]`)](#parameter-markers)
+- [Request body shapes (JSON, `Bytes`, `Form`, file)](#request-body-shapes)
+- [Response control (`Context.set_status` / `set_header` / `set_cookie`)](#response-control)
+- [Typed errors (`@raises`)](#typed-errors)
+- [Streaming (`stream[T]`)](#streaming)
+- [Dependency injection (`Depends`)](#dependency-injection)
+- [Post-response hooks (`after()`)](#post-response-hooks)
+- [Background jobs (`TaskBackend`)](#background-jobs)
+- [Observability (`tythe.otel`)](#observability)
+- [OpenAPI + polyglot codegen (CLI)](#openapi--polyglot-codegen)
+
+---
+
+## App + decorators
+
+```python
+from tythe import App
+
+app = App()
+
+@app.get("/users/{user_id}")
+@app.post("/posts")
+@app.put("/users/{user_id}")
+@app.patch("/users/{user_id}")
+@app.delete("/users/{user_id}")
+async def handler(...): ...
+```
+
+Each decorator registers a route and infers parameter locations from
+annotations + the path template.
+
+## Parameter markers
+
+Inside `Annotated[T, ...]`. Tell Tythe where a value lives on the wire.
+
+```python
+from typing import Annotated
+from tythe.params import Body, Cookie, File, Form, Header, Path, Query, UploadFile
+
+@app.post("/posts/{post_id}/comments")
+async def add_comment(
+    post_id: int,                                       # path (inferred from template)
+    body: Annotated[str, Body()],                       # JSON body field
+    cursor: Annotated[str | None, Query()] = None,      # ?cursor=...
+    if_match: Annotated[str, Header("If-Match")] = "",  # request header
+    session: Annotated[str, Cookie()] = "",             # request cookie
+    avatar: Annotated[UploadFile, File()] = None,       # multipart upload
+): ...
+```
+
+Without an explicit marker:
+
+- path-template names (`{post_id}`) → `Path`
+- structural types (msgspec.Struct / dataclass / TypedDict / Pydantic) → `Body`
+- everything else → `Query`
+
+### List-valued query params
+
+```python
+@app.get("/issues")
+async def list_issues(
+    tag: Annotated[list[str], Query()] = None,  # ?tag=bug&tag=ui  →  ["bug", "ui"]
+    status: Annotated[list[Status], Query()] = None,
+) -> Page: ...
+```
+
+Missing or `None` default → empty list. TS client expands array args back into
+repeated `?tag=a&tag=b` keys.
+
+## Request body shapes
+
+### JSON (default)
+
+```python
+class CreatePost(msgspec.Struct):
+    title: str
+    body: str
+
+@app.post("/posts")
+async def create_post(data: CreatePost) -> Post: ...
+```
+
+Multi-field embedded:
+
+```python
+@app.post("/login")
+async def login(
+    email: Annotated[str, Body()],
+    password: Annotated[str, Body()],
+) -> Session: ...
+```
+
+### Raw bytes — `Bytes`
+
+```python
+from tythe import Bytes
+
+@app.post("/webhooks/stripe")
+async def stripe_webhook(
+    body: Bytes,
+    signature: Annotated[str, Header("stripe-signature")],
+) -> None: ...
+
+@app.get("/exports/{id}.csv")
+async def export(id: str) -> Bytes:
+    return render_csv(id)
+```
+
+Skips the JSON envelope on both sides. TS client passes
+`Blob | Uint8Array | ArrayBuffer` through, decodes responses with `res.blob()`.
+Content-Type defaults to `application/octet-stream` (override via `set_header`).
+
+### Form — `Annotated[T, Form()]`
+
+```python
+import msgspec
+from tythe import Form
+
+class LoginForm(msgspec.Struct):
+    email: str
+    password: str
+    remember_me: bool = False
+
+@app.post("/login")
+async def login(form: Annotated[LoginForm, Form()]) -> Session: ...
+```
+
+Reads `application/x-www-form-urlencoded` (or `multipart/form-data` when files
+are present). The handler receives a `LoginForm` instance — pyright sees the
+inner type directly. TS client sends `URLSearchParams`.
+
+### Multipart files — `UploadFile` + `File()`
+
+```python
+from tythe.params import File, UploadFile
+
+@app.post("/avatar")
+async def upload(file: Annotated[UploadFile, File()]) -> dict[str, int]: ...
+```
+
+## Response control
+
+`Context` is a per-request handle the runtime injects when you annotate a
+parameter `ctx: Context`. Mutating these from inside the handler shapes the
+final response.
+
+```python
+from tythe import Context
+
+@app.post("/issues")
+async def create_issue(data: CreateIssue, ctx: Context) -> Issue:
+    issue = save(data)
+    ctx.set_status(201)
+    ctx.set_header("location", f"/issues/{issue.id}")
+    ctx.set_cookie(
+        "session", sign(user.id),
+        max_age=86400, http_only=True, secure=True, same_site="strict",
+    )
+    return issue
+```
+
+| Method                                                                                       | What it does                                                                          |
+| -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `ctx.set_status(code)`                                                                       | Override the default 200 (e.g. 201 Created, 202 Accepted).                            |
+| `ctx.set_header(name, val)`                                                                  | Add or replace a response header (`Location`, `X-Request-Id`, …).                     |
+| `ctx.set_cookie(name, val, *, max_age, expires, path, domain, secure, http_only, same_site)` | Queue a `Set-Cookie` header. Multiple calls = multiple cookies.                       |
+| `ctx.after(fn, *a, **kw)`                                                                    | Run `fn` after the response is sent. See [Post-response hooks](#post-response-hooks). |
+| `ctx.request`                                                                                | The raw Starlette `Request` if you need an escape hatch.                              |
+| `ctx.headers`                                                                                | Read-only dict of request headers.                                                    |
+| `ctx.cookies`                                                                                | Read-only dict of request cookies.                                                    |
+| `await ctx.is_disconnected()`                                                                | Client-gone check (use it inside long-running streams).                               |
+
+## Validation errors
+
+When an inbound request fails parameter validation, Tythe returns **HTTP 422**
+with a structured body:
+
+```json
+{
+  "detail": "Expected `float`, got `str`",
+  "location": "body",
+  "field": "data.items[2].weight",
+  "value": "not-a-number"
+}
+```
+
+| Field      | Meaning                                                                              |
+| ---------- | ------------------------------------------------------------------------------------ |
+| `detail`   | Human-readable message from msgspec or Pydantic.                                     |
+| `location` | Which input slot failed — `body` / `query` / `header` / `cookie` / `path` / `file`.  |
+| `field`    | Dotted/bracketed path to the offending field (`alias.foo[2].bar`), or `null` if N/A. |
+| `value`    | The offending raw value as received, or `null` if the field was missing entirely.    |
+
+The TS client throws on 422 — wrap calls in `try/catch` and inspect the body if you
+need to surface field-level errors in a form.
+
+## Typed errors
+
+Declare which exceptions a handler can raise. They become a discriminated union
+on the TS side, with `result.ok` narrowing.
+
+```python
+from dataclasses import dataclass
+from tythe import raises
+
+@dataclass
+class IssueNotFound(Exception):
+    issue_id: int
+
+@dataclass
+class Forbidden(Exception):
+    reason: str
+
+@app.get("/issues/{issue_id}")
+@raises(IssueNotFound, Forbidden)
+async def get_issue(issue_id: int) -> Issue:
+    issue = store.get(issue_id)
+    if issue is None:
+        raise IssueNotFound(issue_id=issue_id)
+    return issue
+```
+
+TS side:
+
+```ts
+const r = await api.getIssue({ issueId: 1 });
+if (r.ok) return r.data; // r.data: Issue
+switch (
+  r.error.kind // exhaustive
+) {
+  case "IssueNotFound":
+    return `× ${r.error.issueId}`;
+  case "Forbidden":
+    return `× ${r.error.reason}`;
+}
+```
+
+## Streaming
+
+```python
+import asyncio
+from tythe import stream
+
+class Tick(msgspec.Struct, tag_field="kind", tag="tick"):
+    seq: int
+
+class Done(msgspec.Struct, tag_field="kind", tag="done"):
+    total: int
+
+@app.get("/ticks")
+async def ticks(count: int) -> stream[Tick | Done]:
+    for i in range(count):
+        await asyncio.sleep(0.5)
+        yield Tick(seq=i)
+    yield Done(total=count)
+```
+
+Wire is SSE (`text/event-stream`). TS client returns an `AsyncIterable`:
+
+```ts
+for await (const ev of api.ticks({ count: 10 }, { signal: ac.signal })) {
+  if (ev.kind === "tick") console.log(ev.seq);
+}
+```
+
+Streams + `@raises(...)`: declared errors surface as SSE `event: error`
+frames that throw on the client side.
+
+### Resumption with `SsePayload` / `Last-Event-Id`
+
+Wrap events in `SsePayload(data, id=..., retry_ms=...)` to attach an
+SSE `id:` and an optional `retry:` hint. The TS client tracks the last
+seen id and reconnects with `Last-Event-Id` if the connection drops:
+
+```python
+from tythe import SsePayload, Context, stream
+from tythe.params import Header
+from typing import Annotated
+
+@app.get("/events")
+async def events(
+    last_event_id: Annotated[str | None, Header("Last-Event-Id")] = None,
+) -> stream[Event]:
+    cursor = parse_cursor(last_event_id) if last_event_id else 0
+    async for ev in store.since(cursor):
+        yield SsePayload(data=ev, id=str(ev.seq), retry_ms=3000)
+```
+
+The client side is fully automatic — `for await (const ev of api.events())`
+reconnects with the right header on any transport error, capped at 5
+minutes of cumulative retry. Typed `@raises` errors and explicit user
+cancellation (`AbortSignal`) still propagate immediately.
+
+## Dependency injection
+
+```python
+from tythe import Depends
+
+def current_user(authorization: Annotated[str, Header()] = "") -> User:
+    if not authorization.startswith("Bearer "):
+        raise Forbidden(reason="missing token")
+    return decode(authorization[7:])
+
+@app.get("/me")
+async def me(me: User = Depends(current_user)) -> User:
+    return me
+```
+
+Providers can be plain functions, async functions, sync generators yielding
+once, or async generators yielding once. The post-`yield` body runs as
+teardown after the response is finalized. Same shape as FastAPI.
+
+## Post-response hooks
+
+```python
+from tythe import after
+
+@app.post("/posts")
+async def create_post(data: CreatePost) -> Post:
+    post = save(data)
+    after(notify_webhook, post.id)
+    after(log_audit, "post.created", user_id=post.author_id)
+    return post
+```
+
+Runs sync and async callables after the response is sent. Errors are
+swallowed (response is already gone). Looked up via a contextvar — works
+without threading `ctx` through. Outside a handler it raises.
+
+Also available as `ctx.after(fn, …)` if you have `Context` in scope.
+
+## Background jobs
+
+In-memory queue ships in core. Redis / SQS adapters live in their own
+packages.
+
+```python
+from tythe import InMemoryBackend, TaskBackend, TaskState
+
+backend: TaskBackend = InMemoryBackend()
+
+async def heavy_work(arg: int) -> str:
+    await asyncio.sleep(10)
+    return f"done({arg})"
+
+@app.post("/work")
+async def submit() -> dict[str, str]:
+    task_id = await backend.enqueue(heavy_work, 42)
+    return {"task_id": task_id}
+
+@app.get("/work/{task_id}")
+async def status(task_id: str) -> TaskState[str]:
+    return await backend.status(task_id)
+```
+
+`InMemoryBackend.stream(task_id)` yields `TaskState` snapshots through the
+queued → running → succeeded/failed/cancelled lifecycle.
+
+### One-call submit + status + stream
+
+`mount_task_routes` registers the submit / status / stream triple from a
+single handler, so you don't hand-write the three routes:
+
+```python
+from tythe import App, InMemoryBackend, mount_task_routes
+
+app = App()
+backend = InMemoryBackend()
+
+async def transcribe(payload: TranscribeInput) -> Transcript:
+    return await run_model(payload.audio_url)
+
+mount_task_routes(app, "/transcribe", transcribe, backend=backend)
+```
+
+This wires:
+
+- `POST /transcribe` — body matches `transcribe`'s own param shape;
+  returns `{"task_id": "..."}`.
+- `GET /transcribe/{task_id}` — returns `TaskState[Transcript]`.
+- `GET /transcribe/{task_id}/events` — SSE stream of `TaskState[Transcript]`
+  until the task reaches a terminal status (`succeeded` / `failed` /
+  `cancelled`).
+
+The handler's return type flows into `TaskState[T]` automatically. Unknown
+task ids surface as a structured 422 on either polling route — the same
+shape produced by request validation errors.
+
+## Observability
+
+```python
+from tythe import App
+from tythe.otel import instrument
+
+app = instrument(App())
+```
+
+Adds one OpenTelemetry span per request with method, path, and status code.
+No-op if `opentelemetry-api` isn't installed (it's an optional extra:
+`tythe[otel]`).
+
+## OpenAPI + polyglot codegen
+
+CLI commands that read the same IR the TS codegen uses:
+
+```bash
+tythe openapi server.app:app --out openapi.json
+tythe swift server.app:app --out Tythe.swift
+tythe kotlin server.app:app --out Tythe.kt --package com.example.api
+```
+
+- **`tythe openapi`** — OpenAPI 3.1 doc for external clients (consumers
+  who can't use Tythe's TS client).
+- **`tythe swift`** — typed Swift client using URLSession + JSONEncoder
+  with `convertToSnakeCase`.
+- **`tythe kotlin`** — typed Kotlin client using HttpURLConnection +
+  `kotlinx.serialization` (no ktor/OkHttp dep).
+
+Streaming endpoints surface as `URLRequest` (Swift) / raw `String` (Kotlin) —
+caller wires SSE through their platform's preferred parser.
+
+## What's NOT here
+
+By design. See [`docs/design.md`](./design.md) for the reasoning.
+
+- No `tythe.ai` / LLM-shaped types — LLM tokens are just typed events on
+  an SSE stream; use the existing `stream[T]` primitive.
+- No auth implementation — wire `Depends(current_user)` to your provider
+  (Clerk / Auth0 / custom JWT). See [`docs/auth.md`](./auth.md).
+- No rate limiting, caching headers, ETag — single-header concerns that
+  middleware or `set_header` cover.
+- No WebSocket bidi (yet) — SSE is the default, opt-in only.
+- No GraphQL.
+
+
+---
+
+## 4. Architecture
+
+_Source: [docs/architecture.md](./docs/architecture.md)_
+
+# Architecture
+
+This is what's actually happening when you type `tythe dev`. It's not magic,
+and the parts are small enough that you can read the whole thing in a
+weekend.
+
+## The 30-second mental model
+
+```
+your Python handlers
+        │
+        ▼
+   IR Builder           (inspect + typing.get_type_hints + msgspec schema)
+        │
+        ▼
+    AppIR  ──►  ASGI runtime  ──►  HTTP / SSE
+        │
+        ▼
+    Codegen        (IR → single client.ts)
+        │
+        ▼
+your frontend's src/lib/tythe/client.ts
+        │
+        ▼
+    @tythe/ts    (~3 KB runtime, Proxy dispatch + SSE)
+```
+
+Two flows: **server start** rebuilds the IR and writes `client.ts`; **at
+request time** the ASGI runtime decodes via msgspec, calls your handler,
+encodes the response.
+
+## Layer by layer
+
+### 1. `App` and route registration (`tythe/app.py`)
+
+The `App` is a plain dataclass with a list of `Route` records. Decorators
+(`@app.get`, `@app.post`, …) just append to the list. There are no globals,
+no metaclasses, no import-time side effects.
+
+```python
+app = App()
+
+@app.get("/users/{user_id}")
+async def get_user(user_id: int) -> User: ...
+```
+
+Why this matters: tests can build an `App`, populate it, introspect it, and
+throw it away — all without booting a server.
+
+### 2. IR extraction (`tythe/ir.py`)
+
+At server start (and on every reload) the IR builder walks each `Route`:
+
+1. `inspect.signature(handler)` → parameter names, defaults, kinds.
+2. `typing.get_type_hints(handler, include_extras=True)` → resolved
+   annotations, including `Annotated[T, Body()|Query()|Path()|Header()]`.
+3. `msgspec.json.schema_components([...])` → JSON Schema 2020-12 fragments
+   that share `$ref`-style components for repeated types.
+4. Return-type analysis: `AsyncIterator[T]` (or the friendlier
+   `stream[T]`) → a streaming endpoint; `Task[T]` → long-running.
+5. `tythe.errors.get_declared_raises(handler)` → the typed-error union.
+
+The output is a plain dataclass tree (`AppIR`) — serializable to JSON,
+inspectable in the REPL, easy to snapshot in tests.
+
+### 3. ASGI transport (`tythe/app.py` + Starlette under the hood)
+
+The runtime is Starlette underneath. We don't reinvent routing, ASGI
+lifespan, or middleware — that ecosystem is solid.
+
+For each request:
+
+1. Match path → `Route` → `RouteIR`.
+2. Decode body with `msgspec.json.decode` against the route's input schema.
+   No allocator-heavy model wrapping — msgspec gives us a `Struct` directly.
+3. Resolve `Depends(...)` if present.
+4. Call the handler.
+5. Encode the return value with `msgspec.json.encode`. For streaming
+   handlers, wrap in `EventSourceResponse` and yield tagged frames.
+
+For typed errors: if the handler raises one of the exceptions declared in
+`@raises(...)`, the runtime wraps it in the `Result` envelope. Anything else
+becomes a 500 and is logged.
+
+### 4. Codegen (`tythe/codegen.py`)
+
+Codegen reads an `AppIR` and emits one TypeScript file. The strategy:
+
+- **Types**: every msgspec `Struct` / `TypedDict` / `dataclass` becomes a
+  `type` declaration; shared types are deduped via the components map.
+- **Discriminated unions**: msgspec `tag=` becomes a TS `kind: "..."` field
+  so narrowing works the way TS expects.
+- **Streaming**: an endpoint with `stream[T]` becomes a method returning
+  `AsyncIterable<T>` (or, for tagged unions, the narrowed shape).
+- **Errors**: `@raises(A, B)` becomes `Result<T, A | B>`. The client is
+  forced to handle the typed cases.
+- **The client object**: a `createClient({ routes: [...] })` call followed
+  by a thin `Proxy` so calls like `api.users.get` are synthesized at runtime
+  from the route table — but the _types_ are static.
+
+The output is **one** file. Not a `client/` directory. Not 12 `*.types.ts`
+files. One file you import.
+
+### 5. The dev loop (`tythe/cli.py` + `watchfiles`)
+
+`tythe dev` does three things in one process:
+
+1. Spawn uvicorn with reload enabled (so handler edits hot-reload).
+2. Watch `*.py` with `watchfiles` and rerun IR extraction on change.
+3. Write the codegen output to the configured path atomically (write tmp →
+   `rename`) so your TS toolchain never reads a half-written file.
+
+Everything is logged with `rich` so the terminal stays readable.
+
+### 6. The TS runtime (`@tythe/ts`)
+
+The runtime is ~3 KB min+gz. It exports:
+
+- `createClient(config)` → a `Proxy` that dispatches `api.<name>(...)` to
+  the matching route in the config.
+- `parseSSE(stream)` → a minimal SSE parser. Used by the generated client
+  to turn `fetch().body` into a typed `AsyncIterable<TEvent>`.
+- `Result<T, E>` / `Ok<R>` / `Err<R>` → the envelope type and the helpers
+  for unwrapping a route's success and error type from its return.
+
+Zero dependencies. ESM-first. Side-effect-free. Tree-shakable.
+
+## Why this shape
+
+A few decisions I want to call out explicitly.
+
+**Why an IR at all, instead of inspect → string?**
+Because polyglot. The IR is JSON Schema 2020-12 with a thin Tythe layer for
+streams/errors/tasks. The day someone wants a Swift or Kotlin client, we
+walk the same IR with a different renderer.
+
+**Why msgspec over Pydantic by default?**
+Speed and tightness of the JSON Schema output. msgspec is 2–30× faster than
+Pydantic v2 on the codecs that matter for high-throughput endpoints, and its
+schema export is conservative and predictable. Pydantic ships as a
+first-class plugin (`tythe[pydantic]`) for users who want it.
+
+**Why SSE for streaming, not WebSockets?**
+Browser support is built in (`EventSource`), it passes proxies cleanly, and
+most server-push protocols have standardized on it. WS opens you up to
+bidirectional state-management complexity that most apps don't need. WS is
+on the roadmap (`bidi[Send, Recv]`) for the cases that actually want it.
+
+**Why a Proxy client instead of generated functions?**
+Same reason tRPC does it: the dot path is the only API surface to learn,
+and the types come from the generated `.d.ts` for free. We avoid
+hand-writing (or generating) one function per endpoint.
+
+## Where to read the code
+
+- [`packages/tythe/src/tythe/app.py`](../packages/tythe/src/tythe/app.py)
+- [`packages/tythe/src/tythe/ir.py`](../packages/tythe/src/tythe/ir.py)
+- [`packages/tythe/src/tythe/codegen.py`](../packages/tythe/src/tythe/codegen.py)
+- [`packages/tythe/src/tythe/streaming.py`](../packages/tythe/src/tythe/streaming.py)
+- [`packages/tythe/src/tythe/cli.py`](../packages/tythe/src/tythe/cli.py)
+- [`packages/tythe-ts/src/`](../packages/tythe-ts/src)
+
+If you read all of those and still have a "wait, how does X work?" question,
+that's a docs bug. Please file it.
+
+
+---
+
+## 5. Design
+
+_Source: [docs/design.md](./docs/design.md)_
+
+# Design
+
+This is the long version. The "why" behind every "what." If you're trying
+to evaluate Tythe against the alternatives, or you're considering
+contributing and want to know which way the wind blows, this is the doc
+to read.
+
+## The problem (or: why I built this)
+
+I've been constantly facing this issue. You probably have too.
+
+You're building a product. The backend is in Python — because that's
+where your data, your auth, your queues, your background jobs, your team
+already are. But your users live in a browser. They expect a real
+frontend — Next.js, Vite, SvelteKit — written by people who do not want
+to touch a Jinja template.
+
+So you do the dance:
+
+1. Define a Pydantic model: `class CreatePostRequest(BaseModel): ...`
+2. Reference it from a FastAPI handler
+3. Mount `/openapi.json`
+4. Run `openapi-typescript` or `@hey-api/openapi-ts` or Orval or Kubb or
+   `openapi-generator`
+5. Get back a generated client where your endpoint is now called
+   `createPostPostsPost` and your body type is
+   `Body_create_post_posts_post`
+6. Wrap it in a hand-written hook because nobody wants
+   `createPostPostsPost` in their JSX
+7. Forget to re-run the codegen
+8. Ship a bug
+
+That's the boring case. Then you try to **stream** anything from the
+server — server-sent events, progress updates, partial responses, log
+lines — and the whole thing falls apart. OpenAPI's story for SSE is
+"good luck." Your generated client doesn't have one. So you hand-parse
+`data:` lines in a `fetch` body reader and cast everything to `any`.
+
+I kept hitting this. Every project. Every team I talked to was hitting
+it. The existing tools — tRPC, Connect-RPC, Reflex — each get part of
+it right and miss the rest:
+
+|             | What it gets right                                                  | What it misses                                           |
+| ----------- | ------------------------------------------------------------------- | -------------------------------------------------------- |
+| tRPC        | The Proxy client UX, the "type _is_ the contract" feel              | TypeScript-only. Can't reach Python types.               |
+| Connect-RPC | Real cross-language type safety, streaming                          | `.proto` files as source of truth. Alien data model.     |
+| Reflex      | "Just write Python"                                                 | Hides JS entirely. Wrong abstraction for real frontends. |
+| Encore.ts   | The pattern proof (parse types → derive schema → emit typed client) | TypeScript / Go only.                                    |
+
+So I wrote Tythe. The gap is real, it's structural, and nothing in the
+landscape was going to close it without active work.
+
+## The core insight
+
+tRPC works because TypeScript's compiler can `import type` a router
+definition from the server and _structurally infer_ every input and
+output at the client's compile time. The two halves are the same
+language.
+
+Python's type hints are runtime annotations (PEP 484/526), erased at
+execution, living in a completely different language runtime than the
+TS client. There is no path to tRPC-style inference that crosses the
+Python/TS boundary. _Some_ schema-extraction step is required.
+
+So the question isn't "can we avoid codegen?" It's: **can we make
+codegen invisible?**
+
+That's the whole bet. One `tythe dev` command. One file written into
+your frontend. No "wait, did I run the codegen?" No
+`Body_create_post_posts_post`. The function signature is the contract.
+Everything else is plumbing.
+
+## Design principles
+
+In rough order of importance:
+
+### 1. The Python function signature is the contract.
+
+No separate Pydantic model declared above the handler that the handler
+then references. Inputs are parameter type hints; output is the return
+annotation. The handler _is_ the schema.
+
+Three idiomatic styles, all of which collapse to one declaration:
+
+```python
+# A. Inline Struct — purpose-built inputs
+class CreatePost(msgspec.Struct):
+    title: str; body: str
+@app.post("/posts")
+async def create(data: CreatePost) -> Post: ...
+
+# B. Annotated params — small handlers
+@app.post("/login")
+async def login(
+    email: Annotated[str, Body()],
+    password: Annotated[str, Body()],
+    remember: Annotated[bool, Query()] = False,
+) -> Session: ...
+
+# C. TypedDict — reuse a shape
+class Pagination(TypedDict):
+    cursor: str | None
+    limit: int
+@app.get("/feed")
+async def feed(page: Annotated[Pagination, Query()]) -> Page[Post]: ...
+```
+
+In every case, the parameter annotation _is_ the validator. No
+`class Foo(BaseModel)` declared in another file that the handler then
+re-mentions.
+
+### 2. Codegen exists, but is invisible.
+
+One command (`tythe dev`) runs the server, watches files, and writes
+one `client.ts` into the frontend. Developers never think about it
+after `tythe init`. No build step in `package.json`. No pre-commit
+hook. No "oh, the CI runs codegen too." The watcher owns it.
+
+### 3. One transport, two shapes.
+
+- **Unary**: HTTP POST + JSON. Boring. Works everywhere. Cacheable.
+- **Streaming**: SSE with a typed discriminated-union event envelope.
+- **Bidirectional**: opt-in via `bidi[Send, Recv]`. Not the default.
+
+WebSockets are powerful, and they're a different mental model. Most
+apps don't need them. SSE has first-class browser support, passes
+proxies, and is what most server-push protocols have standardized on.
+Defaulting to SSE keeps the common case simple.
+
+### 4. msgspec by default, Pydantic on opt-in.
+
+Public benchmarks consistently show msgspec is **2–30× faster** than
+Pydantic v2 for decode/encode and **~100×** faster than v1. msgspec's
+`Struct` is a slot-based C extension with native JSON Schema export,
+no allocator-heavy model wrapping, and explicit support for
+`TypedDict`, dataclasses, and unions.
+
+For a framework whose serialization sits on the hot path of every
+request (and especially on streaming endpoints), defaulting to msgspec
+is the right call.
+
+Pydantic is a **first-class plugin** (`tythe[pydantic]`), not a
+second-class one. A large slice of the Python ecosystem lives in
+Pydantic-land, and refusing to support it would be malpractice.
+
+### 5. Errors are values.
+
+TypeScript doesn't have native exceptions across IO boundaries.
+Discriminated unions are the right primitive. `@raises(Err1, Err2)`
+on a Python handler becomes `Result<T, Err1 | Err2>` on the client —
+and the type checker forces the caller to handle each typed case.
+
+No "try/catch lottery" on the TS side. No string-matching
+`error.detail`.
+
+### 6. No magic globals.
+
+The router is an explicit `App` object you compose. ASGI underneath.
+Deploy anywhere uvicorn runs. No framework-detected module-level
+auto-discovery.
+
+### 7. Ship the fundamentals; let users build the rest.
+
+Tythe ships at the lowest useful level of abstraction: typed RPC,
+typed streaming, typed errors, cancellation, file uploads,
+dependency injection. That's the framework.
+
+We **do not** ship vertical integrations — no `tythe.ai` module, no
+LLM client adapters, no React hooks in core, no chat-bot primitives,
+no auth providers. Those layers compose on top of the fundamentals,
+and they belong in separate packages (`@tythe/react`, `@tythe/svelte`,
+community plugins, your own code). Tying them into core would couple
+Tythe's release cadence to ecosystems that move on their own
+schedules, and that has historically gone badly for general-purpose
+frameworks.
+
+> An LLM token stream is just a typed SSE event. A progress feed is
+> just a typed SSE event. A pubsub topic is just a typed SSE event.
+> Ship the fundamental; the vertical use cases come for free.
+
+## What I'm explicitly _not_ doing
+
+| Decision                            | Rationale                                                                                                                                                                                                                        |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **No `tythe.ai` module.**           | LLM-shaped types (Token, Image, Audio) belong in user code or a separate plugin. The core stays application-agnostic.                                                                                                            |
+| **No GraphQL.**                     | Different mental model. Scope balloons. People who want GraphQL have Strawberry.                                                                                                                                                 |
+| **No managed hosted service.**      | Tythe is a library. Modal / Fly / Render handle hosting fine.                                                                                                                                                                    |
+| **No bundled frontend template.**   | Bring your own frontend. Tythe writes a file into your `src/`.                                                                                                                                                                   |
+| **WS as default streaming.**        | SSE is enough. Simpler. Industry-standard. WS is opt-in.                                                                                                                                                                         |
+| **OpenAPI as the canonical IR.**    | OpenAPI loses fidelity on discriminated unions, generics, streaming. Tythe's IR is JSON Schema + a thin extension layer. OpenAPI export is on the v0.3 roadmap as a _secondary_ output for users who also need external clients. |
+| **React hooks in the core client.** | `@tythe/ts` is framework-agnostic. React-specific bindings live in `@tythe/react`. Svelte in `@tythe/svelte`. And so on.                                                                                                         |
+
+## Comparison to alternatives
+
+|                        | **Tythe**                               | FastAPI + openapi-typescript | tRPC              | Encore.ts          | Connect-RPC              | Reflex              |
+| ---------------------- | --------------------------------------- | ---------------------------- | ----------------- | ------------------ | ------------------------ | ------------------- |
+| Backend lang           | **Python**                              | Python                       | TypeScript        | TS / Go            | Polyglot                 | Python              |
+| Frontend lang          | **Any TS**                              | TS                           | TS only           | TS only            | Polyglot                 | None — JS hidden    |
+| DTO duplication        | **None**                                | Yes                          | None              | None               | Yes (`.proto`)           | N/A                 |
+| Codegen visible to dev | **`tythe dev` only**                    | Yes, explicit                | None              | Implicit (build)   | Yes, `buf gen`           | None                |
+| Streaming type-safe    | **Yes (typed SSE union)**               | Painful / manual             | Subscriptions     | Yes                | Yes                      | N/A                 |
+| Typed errors → TS      | **Discriminated union**                 | HTTP codes                   | `TRPCError`       | Yes                | Yes (`isAPIError`)       | N/A                 |
+| Validation runtime     | msgspec (Pydantic opt-in)               | Pydantic v2                  | Zod               | Rust + JSON Schema | Protovalidate            | Pydantic            |
+| Setup cost             | **`tythe init` + `tythe dev`**          | High                         | Low (TS monorepo) | Low                | Medium                   | Low                 |
+| Best for               | **Python backend + modern TS frontend** | CRUD APIs + external clients | TS monorepo       | TS/Go monorepo     | Cross-team microservices | Internal dashboards |
+
+## Risks I'm aware of
+
+I'd rather call these out than pretend they don't exist.
+
+1. **Codegen UX edge cases.** Forward references, generics over
+   `TypeVar`, recursive types, and `Union` of structs with overlapping
+   field sets are notoriously fiddly. We pin to msgspec's tag-union
+   conventions, ban implicit untagged unions of structs, and ship a
+   clear linter for ambiguous IRs. Where this fails, we fail loudly.
+
+2. **Python ecosystem inertia.** FastAPI has enormous mindshare and
+   is "good enough." Tythe must win on the codegen UX, the
+   single-file generated client, and first-class typed streaming —
+   not on raw feature count.
+
+3. **Frontend framework matrix.** Next.js, Vite, SvelteKit, Astro,
+   Remix, Expo all behave differently around watcher integration and
+   bundling generated files. We solve Next.js and Vite first; the
+   rest follow.
+
+4. **Pydantic gravity.** Many target users live in Pydantic-land.
+   Refusing to support Pydantic kills adoption. We solve this with
+   the `tythe[pydantic]` peer plugin.
+
+5. **Streaming protocols are messy.** SSE itself is stable, but the
+   patterns layered on top (event envelopes, reconnection, resume
+   tokens) vary. Tythe ships its own conservative wire protocol
+   (tagged JSON over SSE) and offers adapters to common third-party
+   protocols as _separate_ packages, so the core never has to chase
+   someone else's spec.
+
+6. **Maintenance burden of the TS client.** The runtime must stay
+   tiny (~3 KB) and dependency-free; otherwise it becomes a
+   liability. We mirror tRPC's discipline here.
+
+## What "done" looks like for v1.0
+
+- A new contributor can read [`docs/getting-started.md`](./getting-started.md),
+  follow it, and have a typed end-to-end call working in under 5
+  minutes from a clean machine.
+- `npx create-tythe-app` produces a working Next.js + Tythe project
+  that runs in 60 seconds from clone to first response.
+- The generated `client.ts` for a 50-route API is under 200 KB
+  ungzipped.
+- A real OSS user has shipped a real product on Tythe. I want one
+  testimonial before 1.0.
+
+If you're building something that maps to this design and you hit a
+wall, [open an issue](https://github.com/tamimbinhakim/tythe/issues). The
+walls are how I find out what's wrong.
+
+
+---
+
+## 6. Auth recipes
+
+_Source: [docs/auth.md](./docs/auth.md)_
+
+# Auth recipes
+
+Tythe doesn't ship auth itself — that's intentional. Auth is a deployment
+decision (NextAuth vs Clerk vs Auth0 vs custom JWT vs session cookies),
+and the right answer depends on where your frontend lives and what your
+team already runs. What Tythe ships is the primitive that makes auth
+trivial to wire: **a `Depends(...)` resolver that takes a `Request` (or
+header / cookie) and returns whoever you want on `ctx.user`**.
+
+This page is a cookbook. Pick the recipe that matches your auth provider
+and drop the resolver into your `Depends(...)` chain.
+
+## 1. Bearer JWT (Clerk, Auth0, Supabase, custom)
+
+```python
+import jwt
+from dataclasses import dataclass
+from typing import Annotated
+
+from tythe import App, Depends
+from tythe.params import Header
+
+app = App()
+
+@dataclass
+class User:
+    id: str
+    email: str
+
+@dataclass
+class Forbidden(Exception):
+    reason: str
+
+def current_user(
+    authorization: Annotated[str, Header()] = "",
+) -> User:
+    if not authorization.startswith("Bearer "):
+        raise Forbidden(reason="missing bearer token")
+    token = authorization.removeprefix("Bearer ").strip()
+    try:
+        claims = jwt.decode(token, key="...", algorithms=["RS256"])
+    except jwt.PyJWTError as exc:
+        raise Forbidden(reason="invalid token") from exc
+    return User(id=claims["sub"], email=claims["email"])
+
+@app.get("/me")
+async def me(me: User = Depends(current_user)) -> User:
+    return me
+```
+
+`@raises(Forbidden)` on the handler makes the error a typed discriminated
+union on the TS side; the client sees `{ ok: false, error: { kind:
+"Forbidden", reason: ... } }`.
+
+## 2. Session cookies (Lucia, Iron Session, Django-style)
+
+```python
+def current_user(session: Annotated[str, Cookie()] = "") -> User:
+    if not session:
+        raise Forbidden(reason="no session cookie")
+    record = sessions.get(session)
+    if record is None:
+        raise Forbidden(reason="expired session")
+    return record.user
+```
+
+## 3. NextAuth via JWT
+
+NextAuth signs its session into a cookie; Tythe reads it the same way
+you'd read any cookie. The token format is documented at
+[NextAuth's JWT docs](https://next-auth.js.org/configuration/options#jwt).
+
+```python
+from typing import Annotated
+
+from tythe.params import Cookie
+
+def current_user(
+    next_auth_session_token: Annotated[str, Cookie("__Secure-next-auth.session-token")] = "",
+) -> User:
+    if not next_auth_session_token:
+        raise Forbidden(reason="not signed in")
+    return _decode_nextauth_jwt(next_auth_session_token)
+```
+
+## 4. Optional auth (anonymous fallback)
+
+Make the dependency return `User | None` and don't raise on missing
+credentials:
+
+```python
+def optional_user(authorization: Annotated[str, Header()] = "") -> User | None:
+    if not authorization.startswith("Bearer "):
+        return None
+    return _decode(authorization.removeprefix("Bearer "))
+```
+
+## What Tythe doesn't do
+
+- **Issue tokens.** That's your auth provider's job (Clerk, Auth0, your
+  custom issuer).
+- **Rotate keys / hit JWKS.** Use your auth provider's SDK or `pyjwt[jwks]`.
+- **Manage sessions.** Use Lucia, Django, Iron Session, etc.
+
+Tythe's contribution is making the resolver type-safe and reusable across
+every handler. Once `current_user` works, `Depends(current_user)` plugs
+into any route in two characters.
+
+
+---
+
+## 7. IR stability policy
+
+_Source: [docs/ir-stability.md](./docs/ir-stability.md)_
+
+# IR stability policy
+
+Tythe's intermediate representation (`tythe.ir.AppIR`) is the contract
+between server and client. Anything that reads the IR — the TS codegen,
+the OpenAPI exporter, the polyglot Swift / Kotlin renderers, `tythe diff`,
+and any third-party tool — relies on its shape.
+
+**As of v1.0**, the IR's shape is committed. This document spells out
+what that commitment means.
+
+## What's covered
+
+- **`AppIR`, `RouteIR`, `ParamIR`, `ErrorIR`** dataclass fields (names,
+  meanings, types).
+- **The JSON snapshot format** emitted by `tythe ir <module:attr>`.
+- **The wire format** between Tythe servers and clients: JSON envelope,
+  SSE frame shape, snake_case ↔ camelCase translation rule.
+
+## Compatibility rules
+
+| Change                                            | Allowed in         | Notes                                          |
+| ------------------------------------------------- | ------------------ | ---------------------------------------------- |
+| Add a new optional field to `RouteIR` / `ParamIR` | Any minor release  | New consumers see it, old consumers ignore it. |
+| Add a new optional flag (e.g. `binary_body`)      | Any minor release  | Default must preserve previous behavior.       |
+| Add a new top-level dataclass                     | Any minor release  |                                                |
+| Add a new enum value to `ParamLocation` etc.      | Major release only | Existing exhaustive switches break otherwise.  |
+| Rename a field                                    | Major release only | After one full minor of deprecation.           |
+| Remove a field                                    | Major release only | After one full minor of deprecation.           |
+| Change a field type (narrow)                      | Major release only |                                                |
+| Change a field type (widen)                       | Minor release      | Must be a strict superset.                     |
+| Reorder fields                                    | Free               | Field order is not part of the contract.       |
+
+## Wire-format invariants
+
+These are frozen:
+
+- **JSON body keys** are snake_case on the wire. The TS client translates
+  to camelCase before handing to user code; the Python server reads
+  snake_case directly.
+- **`Result` envelope** is `{"ok": true, "data": T}` or `{"ok": false,
+"error": E}`. Routes without `@raises(...)` return `T` directly.
+- **SSE frame format** matches the W3C SSE spec:
+  - `data: <json>\n\n` for plain events
+  - `id: <string>\n` (optional) for resume cursor
+  - `retry: <ms>\n` (optional) for backoff hint
+  - `event: done\ndata: {}\n\n` to terminate
+  - `event: error\ndata: <error-payload>\n\n` for typed `@raises` errors
+- **Multipart and form-urlencoded** bodies decode through `request.form()`
+  with field names matching the wire alias.
+- **Bytes** routes serialize as `application/octet-stream` by default;
+  Content-Type is overridable via `ctx.set_header`.
+
+## Deprecation cycle
+
+When a field, primitive, or wire-format detail is going away:
+
+1. **Announce.** Marked `deprecated` in CHANGELOG; warning emitted at
+   import time or on first use.
+2. **Hold for one full minor release.** During this window, both old
+   and new APIs work; old emits a `DeprecationWarning`.
+3. **Remove in the next major.**
+
+Example: removing a hypothetical `RouteIR.legacy_flag` field.
+
+- v1.5: field marked deprecated; using it emits a warning.
+- v1.6: still works, still warns.
+- v2.0: removed.
+
+`tythe diff` flags additions / removals at the IR level so accidental
+breakages can't slip through.
+
+## Compatibility tests
+
+The CI suite includes IR snapshot tests: for each minor release we
+freeze a representative `tythe-ir.json` and assert future versions can
+either consume it directly or produce a backward-compatible diff. The
+files live in `packages/tythe/tests/golden/` (added in v0.2).
+
+
+---
+
+## 8. Semver policy
+
+_Source: [docs/semver.md](./docs/semver.md)_
+
+# Versioning policy
+
+Tythe follows [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
+Each package (`tythe`, `@tythe/ts`, `@tythe/react`, `@tythe/svelte`,
+`@tythe/solid`) versions independently — managed by `release-please` off
+the manifest at `.release-please-manifest.json`.
+
+## What semver means here
+
+| Bump                            | Trigger                    | Examples                                                                                                     |
+| ------------------------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| **Patch** (`X.Y.Z` → `X.Y.Z+1`) | Bug fix, no surface change | A `msgspec.convert` edge case is fixed; doc typo; CI dep bump.                                               |
+| **Minor** (`X.Y` → `X.Y+1`)     | Additive feature, no break | New primitive (`Bytes`, `Form`), new CLI command, new optional IR field, new `__all__` export.               |
+| **Major** (`X` → `X+1`)         | Breaking change            | Field removed from IR, public API renamed, wire format altered, primitive removed, default behavior changed. |
+
+## Breaking change examples
+
+Anything below is breaking by default, regardless of how small it looks:
+
+- Removing or renaming a public name in `__all__`.
+- Changing the shape of the JSON wire format (envelope keys, SSE frame layout).
+- Removing or renaming an `IR` field.
+- Adding a required parameter to a public function.
+- Tightening a type annotation in a way that rejects previously valid inputs.
+- Changing default behavior (e.g. flipping a default from `False` to `True`).
+- Changing a route's method or path in a generated client.
+
+If you're unsure, treat it as breaking.
+
+## Pre-1.0 behavior
+
+Until 1.0:
+
+- **Minor bumps may break.** That's why the README and per-package READMEs
+  ask you to pin exact versions.
+- **CHANGELOG entries call out breakage explicitly** at the top of each section.
+
+After 1.0:
+
+- **Patch and minor never break.**
+- **Major bumps follow the deprecation cycle in `ir-stability.md`** — one
+  full minor of deprecation warnings before removal.
+
+## How CI enforces it
+
+- **`tythe diff` in CI** compares the IR snapshot from `main` to the IR
+  snapshot built from each PR. Breaking changes annotate the PR with
+  GitHub error annotations and fail the required check.
+- **release-please** classifies commits via Conventional Commits. A
+  `feat!:` or `BREAKING CHANGE:` footer triggers a major bump in the
+  release PR. A plain `feat:` triggers minor. `fix:` triggers patch.
+  `chore:`, `docs:`, `ci:`, `test:`, `build:`, `refactor:` are hidden
+  from the changelog and do not bump versions.
+
+## What you can rely on
+
+Once a name appears in `__all__` (Python) or `index.ts` (TS), it is
+public and follows the rules above. Anything imported via a private
+underscore-prefixed module (`tythe._pydantic`, `tythe._idents`, …) is
+not part of the contract and may change in any release.
+
+## What is _not_ semver-governed
+
+- **Internal implementation details.** Refactors that don't change
+  observable behavior or the public surface are not breaking, even if
+  they reshape modules.
+- **Performance characteristics.** Tythe aims to be fast, but a
+  measurable regression in p99 latency is a bug to be fixed, not a
+  semver event.
+- **Dev dependencies.** Bumping ruff or vitest versions is never a
+  breaking change for downstream consumers.
+- **Examples (`examples/*`).** Examples are reference material, not API.
+- **The `tythe-kit` meta-framework** (if and when it ships) versions
+  separately.
+
+
+---
+
+## 9. LTS policy
+
+_Source: [docs/lts.md](./docs/lts.md)_
+
+# Long-term support
+
+This page describes the support window for Tythe releases.
+
+## Active lines
+
+| Line              | Status | Bug fixes | Security fixes | EOL                |
+| ----------------- | ------ | --------- | -------------- | ------------------ |
+| **1.x** (current) | Active | ✓         | ✓              | TBD when 2.0 ships |
+
+Pre-1.0 versions (0.x) are not LTS-eligible — they exist for
+preview only and should be pinned to an exact version.
+
+## Support guarantees on the 1.x line
+
+Once 1.0 ships:
+
+- **Patch releases (`1.x.y` → `1.x.y+1`)** ship as needed for bug fixes
+  and security issues. No new features.
+- **Minor releases (`1.x` → `1.x+1`)** ship additive features. Backwards
+  compatible.
+- **Major (`2.0`)** ships only when there is a strongly motivated
+  breaking change. The previous major (`1.x`) gets at least 12 months
+  of bug-fix and security backports after `2.0` ships.
+
+## What backporting covers
+
+A fix lands on `main` and is then backported to the latest supported
+`1.x` minor line if:
+
+- It's a **security issue** (any severity).
+- It's a **regression** introduced in `1.x`.
+- It's a **user-blocking bug** with no documented workaround.
+
+A fix is **not** backported if:
+
+- It depends on a `feat` that only landed on a newer minor.
+- It would require a behavior change inconsistent with the LTS line's
+  `1.x.y` semver contract.
+
+## How to pin
+
+For pre-1.0 (now):
+
+```bash
+uv add 'tythe==0.1.0'              # PyPI
+pnpm add '@tythe/ts@0.1.0' \
+        '@tythe/react@0.1.0' \
+        '@tythe/svelte@0.1.0' \
+        '@tythe/solid@0.1.0'       # npm
+```
+
+After 1.0, pin to a minor with `^1.x` (or `>=1.x.y,<2`) and trust
+patch-level updates.
+
+## Security disclosure
+
+See [`SECURITY.md`](../SECURITY.md). Patches land in a same-day point
+release on the active line; the supported `1.x` LTS line gets the same
+backport on the next business day at the latest.
+
+## What gets EOL'd
+
+A line goes EOL when a strictly newer line has been available for ≥12
+months. EOL versions stop receiving bug fixes and security patches.
+Critical CVEs may still get an out-of-band patch at the maintainer's
+discretion, but it's not guaranteed.
+
+EOL is announced in CHANGELOG and on the GitHub release for the final
+patch on that line.
