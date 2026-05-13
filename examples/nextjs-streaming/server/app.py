@@ -21,7 +21,6 @@ from dataclasses import dataclass
 from typing import Literal
 
 import msgspec
-
 from tythe import App, raises, stream
 
 app = App()
