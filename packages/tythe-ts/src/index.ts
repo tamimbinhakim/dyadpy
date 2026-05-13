@@ -3,6 +3,7 @@
 
 export { createClient } from "./client.js";
 export { parseSSE } from "./sse.js";
+export { DEFAULT_FORWARDED_HEADERS, forwardHeaders } from "./ssr.js";
 export { unwrapResult } from "./types.js";
 export type {
   CallOptions,

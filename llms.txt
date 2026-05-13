@@ -27,6 +27,7 @@ idiomatic primitives.
 - [Architecture](https://github.com/tamimbinhakim/tythe/blob/main/docs/architecture.md): what happens when you type `tythe dev` — IR extraction, ASGI dispatch, codegen, dev loop.
 - [Design](https://github.com/tamimbinhakim/tythe/blob/main/docs/design.md): the "why" behind every "what" — why msgspec, why SSE, why no OpenAPI by default.
 - [Auth recipes](https://github.com/tamimbinhakim/tythe/blob/main/docs/auth.md): JWT, sessions, NextAuth — wiring `Depends(current_user)` to your provider.
+- [SSR](https://github.com/tamimbinhakim/tythe/blob/main/docs/ssr.md): server-side rendering with Next.js App Router, SvelteKit, and Solid Start — prefetch + hydrate helpers, header forwarding, the CSR-safety contract.
 - [IR stability](https://github.com/tamimbinhakim/tythe/blob/main/docs/ir-stability.md): additive-only invariants on the JSON-Schema IR and the on-the-wire envelope.
 - [Semver policy](https://github.com/tamimbinhakim/tythe/blob/main/docs/semver.md): what counts as a break and the deprecation cycle.
 - [LTS policy](https://github.com/tamimbinhakim/tythe/blob/main/docs/lts.md): support windows, backport policy, EOL rules.
