@@ -3,15 +3,15 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_FORWARDED_HEADERS, forwardHeaders } from "../src/ssr.js";
 
 describe("forwardHeaders", () => {
-  it("returns the subset of headers in DEFAULT_FORWARDED_HEADERS, lowercased", () => {
+  it("forwards the default subset, lowercased", () => {
     const req = new Request("https://example.com/", {
       headers: {
         Cookie: "session=abc",
         Authorization: "Bearer xyz",
         "X-CSRF-Token": "csrf",
         "X-Request-Id": "req-1",
-        "Content-Type": "application/json", // intentionally excluded
-        "User-Agent": "test", // intentionally excluded
+        "Content-Type": "application/json",
+        "User-Agent": "test",
       },
     });
 
@@ -27,8 +27,7 @@ describe("forwardHeaders", () => {
 
   it("accepts a Headers instance directly", () => {
     const headers = new Headers({ cookie: "k=v" });
-    const out = forwardHeaders(headers);
-    expect(out["cookie"]).toBe("k=v");
+    expect(forwardHeaders(headers)["cookie"]).toBe("k=v");
   });
 
   it("honors a custom name list", () => {
@@ -40,15 +39,12 @@ describe("forwardHeaders", () => {
     expect(out["cookie"]).toBeUndefined();
   });
 
-  it("omits headers that aren't on the request", () => {
-    const req = new Request("https://example.com/", {
-      headers: { Cookie: "k=v" },
-    });
-    const out = forwardHeaders(req);
-    expect("authorization" in out).toBe(false);
+  it("omits absent headers", () => {
+    const req = new Request("https://example.com/", { headers: { Cookie: "k=v" } });
+    expect("authorization" in forwardHeaders(req)).toBe(false);
   });
 
-  it("exports a list of default forwarded headers", () => {
+  it("exports the default forwarded names", () => {
     expect(DEFAULT_FORWARDED_HEADERS).toContain("cookie");
     expect(DEFAULT_FORWARDED_HEADERS).toContain("authorization");
   });

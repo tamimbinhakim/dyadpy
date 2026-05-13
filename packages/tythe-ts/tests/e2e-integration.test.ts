@@ -1,12 +1,5 @@
-// Integration tests for the generated-client surface.
-//
-// We don't spin a Python server here — that's covered in
-// `packages/tythe/tests/test_e2e_smoke.py`. Instead, we build a fetch impl
-// that mimics what a Tythe server returns for each primitive (snake_case
-// keys, Result envelopes, SSE frames) and drive the runtime end-to-end. If
-// the camel↔snake translator, the Result handling, the binary/form/multipart
-// body modes, or the SSE parser regress, this test surfaces it under the
-// same conditions a user would see in production.
+// Generated-client surface against a fetch impl that mimics a real Tythe
+// server. Companion to `packages/tythe/tests/test_e2e_smoke.py`.
 
 import { describe, expect, it } from "vitest";
 
@@ -98,7 +91,6 @@ type Api = {
   ) => AsyncIterable<{ kind: "tick"; seq: number } | { kind: "done"; total: number }>;
 };
 
-// Mock server: maps `${method} ${path}` to a handler that returns a Response.
 function makeServer(): { fetch: FetchImpl; calls: Request[] } {
   const calls: Request[] = [];
   const handlers: Array<[string, (req: Request) => Promise<Response> | Response]> = [
@@ -213,7 +205,6 @@ describe("e2e integration — generated-client surface against a Tythe-shaped mo
     const me = await api.me({ authorization: "Bearer tok" });
     expect(me).toEqual({ id: 1, email: "a@x.com", createdAt: "2025-01-01" });
 
-    // Header alias hit the wire (lowercased per HTTP).
     expect(server.calls[0]!.headers.get("authorization")).toBe("Bearer tok");
   });
 
@@ -242,7 +233,6 @@ describe("e2e integration — generated-client surface against a Tythe-shaped mo
     expect(r.ok).toBe(false);
     if (!r.ok) {
       expect((r.error as { kind: string }).kind).toBe("PostNotFound");
-      // snake_case `post_id` on the wire → camel `postId` on the client.
       expect((r.error as unknown as { postId: number }).postId).toBe(404);
     }
   });
@@ -315,7 +305,7 @@ describe("e2e integration — generated-client surface against a Tythe-shaped mo
       baseUrl: "http://test",
     }) as Api;
 
-    const payload = new Uint8Array([0xde, 0xad, 0xbe, 0xef]);
+    const payload = new Uint8Array([222, 173, 190, 239]);
     const r = (await api.stripeWebhook({ body: payload })) as { bytes: number };
     expect(r.bytes).toBe(4);
   });
@@ -346,7 +336,6 @@ describe("e2e integration — generated-client surface against a Tythe-shaped mo
     for await (const ev of api.feed({ count: 3 })) {
       seen.push(ev);
     }
-    // 3 tick frames; the `event: done` frame terminates the iteration.
     expect(seen).toEqual([
       { kind: "tick", seq: 0 },
       { kind: "tick", seq: 1 },
@@ -387,7 +376,6 @@ describe("e2e integration — generated-client surface against a Tythe-shaped mo
       seen.push(ev);
       if (seen.length >= 3) ac.abort();
     }
-    // Abort triggered after 3 frames — loop exits cleanly without draining all 100.
     expect(seen.length).toBeGreaterThanOrEqual(3);
     expect(seen.length).toBeLessThan(100);
     expect(calls[0]!.signal?.aborted).toBe(true);

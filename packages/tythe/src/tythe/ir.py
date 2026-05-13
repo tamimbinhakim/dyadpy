@@ -223,14 +223,7 @@ def _binary_schema() -> dict[str, Any]:
 
 
 def _extract_docstring(handler: Any) -> str | None:
-    """Pull a clean docstring off a handler, or ``None`` if there isn't one.
-
-    ``inspect.getdoc`` normalizes indentation the same way Python's ``help()``
-    does — strips a uniform leading indent and trailing whitespace — so the
-    text reads cleanly when re-emitted as JSDoc.
-    """
-    doc = inspect.getdoc(handler)
-    return doc if doc else None
+    return inspect.getdoc(handler) or None
 
 
 def _split_pydantic_schema(

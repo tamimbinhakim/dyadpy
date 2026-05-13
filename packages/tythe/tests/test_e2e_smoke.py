@@ -1,12 +1,4 @@
-"""End-to-end smoke tests against a single representative app.
-
-Where `test_runtime.py` exercises one primitive per test in isolation, this
-file boots one realistic Tythe app — auth, CRUD, streaming, file upload, form
-body, typed errors, dependency injection, response control — and runs the
-journey a real client would: log in, fetch identity, create a post, list,
-upload an avatar, subscribe to events, hit a 404. If any wire shape regresses,
-the failure surfaces here even when the underlying unit test still passes.
-"""
+"""End-to-end smoke tests against one realistic Tythe app."""
 
 # pyright: basic
 
@@ -23,8 +15,6 @@ import pytest
 
 from tythe import App, Context, Depends, Form, after, raises, stream
 from tythe.params import Cookie, File, Header, Query, UploadFile
-
-# ---- domain types ----
 
 
 class User(msgspec.Struct):
@@ -77,9 +67,6 @@ class Done(msgspec.Struct, tag_field="kind", tag="done"):
     total: int
 
 
-# ---- in-memory state for the fixture app ----
-
-
 @dataclass
 class State:
     users: dict[int, User] = field(default_factory=dict)
@@ -93,9 +80,6 @@ def _seed() -> State:
     state.users[1] = User(id=1, email="alice@x.com", name="Alice", role="admin")
     state.users[2] = User(id=2, email="bob@x.com", name="Bob", role="member")
     return state
-
-
-# ---- the fixture app ----
 
 
 def _build_app(state: State) -> App:
@@ -219,9 +203,6 @@ def client(app: App) -> httpx.AsyncClient:
     return httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test")
 
 
-# ---- the journey ----
-
-
 async def test_login_then_me(client: httpx.AsyncClient) -> None:
     r = await client.post(
         "/login",
@@ -278,7 +259,6 @@ async def test_create_post_sets_status_and_location(
     post = r.json()["data"]
     assert post["author_id"] == 1
     assert post["tags"] == ["intro", "meta"]
-    # `after(...)` callback ran post-response.
     await asyncio.sleep(0.01)
     assert "post.created:1" in state.audit
 
@@ -335,9 +315,6 @@ async def test_stream_event_sequence(client: httpx.AsyncClient) -> None:
         assert r.headers["content-type"].startswith("text/event-stream")
         raw = b"".join([chunk async for chunk in r.aiter_bytes()])
     text = raw.decode()
-    # Each event payload is a JSON object; the SSE wrapper interleaves them
-    # with `data:` prefixes and blank-line terminators. We check the payloads,
-    # not the framing — that's already covered in test_sse_resume.
     assert '"kind":"tick"' in text
     assert '"seq":0' in text
     assert '"seq":1' in text
@@ -355,40 +332,28 @@ async def test_preferences_reads_cookie(client: httpx.AsyncClient) -> None:
     assert r.json() == {"theme": "dark"}
 
 
-# ---- generated-client shape check ----
-
-
 def test_codegen_for_smoke_app_renders_every_section(app: App) -> None:
-    """The generated client.ts for this comprehensive app must cover every
-    section the renderer emits — domain types, errors, enums, the route table,
-    the per-route namespace. If any of these go missing, the codegen has
-    regressed in a way none of the per-primitive tests would catch."""
     from tythe.codegen import render
     from tythe.ir import build_ir
 
     out = render(build_ir(app))
 
-    # Header + imports.
     assert "AUTO-GENERATED" in out
     assert 'from "@tythe/ts"' in out
-    assert "Result," in out  # at least one route declares @raises and isn't streaming
+    assert "Result," in out
 
-    # Each section.
     assert "// ── Domain types" in out
     assert "// ── Errors" in out
     assert "// ── Enum value-objects" in out
     assert "// ── Client" in out
     assert "// ── Per-route type aliases" in out
 
-    # Domain coverage.
     for name in ("User", "CreatePost", "Post", "Session", "LoginForm", "Tick", "Done"):
         assert f"export type {name}" in out, f"missing domain type {name}"
 
-    # Error coverage.
     assert "export type Forbidden" in out
     assert "export type PostNotFound" in out
 
-    # Method coverage — all 9 routes.
     for method in (
         "login(",
         "me(",
@@ -402,7 +367,6 @@ def test_codegen_for_smoke_app_renders_every_section(app: App) -> None:
     ):
         assert method in out, f"missing method {method}"
 
-    # Per-route namespace.
     for ns in (
         "export namespace login",
         "export namespace getPost",
@@ -410,7 +374,6 @@ def test_codegen_for_smoke_app_renders_every_section(app: App) -> None:
     ):
         assert ns in out
 
-    # Wire-shape descriptor flags.
     assert "streams: true" in out
     assert "result: true" in out
     assert "formBody: true" in out

@@ -1,16 +1,8 @@
 // @vitest-environment node
-// CSR-safety contract: importing `@tythe/react` (and its server subpath) under
-// a Node environment with no `window` / `document` / `localStorage` must not
-// throw, must not reach for those globals, and must not pull in `react-dom`.
-//
-// This is what makes the package usable from a Next.js server component, a
-// SvelteKit server load, a Solid Start server function, or any other Node-side
-// rendering pass that doesn't have a browser to look up.
-
 import { describe, expect, it } from "vitest";
 
 describe("CSR safety", () => {
-  it("loads `@tythe/react` (hooks entrypoint) without touching DOM globals", async () => {
+  it("loads `@tythe/react` without DOM globals", async () => {
     expect(typeof globalThis.window).toBe("undefined");
     expect(typeof globalThis.document).toBe("undefined");
 
@@ -18,7 +10,7 @@ describe("CSR safety", () => {
     expect(typeof mod.createTytheHooks).toBe("function");
   });
 
-  it("loads `@tythe/react/server` without touching DOM globals", async () => {
+  it("loads `@tythe/react/server` without DOM globals", async () => {
     expect(typeof globalThis.window).toBe("undefined");
     expect(typeof globalThis.document).toBe("undefined");
 
