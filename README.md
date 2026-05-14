@@ -53,26 +53,75 @@ That's the whole loop. `dyadpy dev` rewrites `client.ts` every time you save Pyt
 - **First-class hooks for the big three.** `@dyadpy/react` (TanStack Query), `@dyadpy/svelte` (stores), `@dyadpy/solid` (resources). Server-side prefetch helpers ship with each.
 - **Fast.** msgspec on the hot path — 2–30× faster than Pydantic v2 on decode/encode. Pydantic still ships as a first-class plugin (`dyadpy[pydantic]`).
 
-## What it ships
+## Day-to-day
 
-| Primitive                                     | What it does                                                                |
-| --------------------------------------------- | --------------------------------------------------------------------------- |
-| `@app.{get,post,put,patch,delete}`            | Route decorators. Param locations inferred from path + type shape.          |
-| `Annotated[T, Query/Header/Cookie/Path/Body]` | Explicit param-location markers when inference isn't enough.                |
-| `Annotated[list[T], Query()]`                 | List-valued query params (`?tag=a&tag=b`).                                  |
-| `Annotated[T, Form()]`                        | `application/x-www-form-urlencoded` or multipart form bodies.               |
-| `Annotated[UploadFile, File()]`               | Multipart file uploads.                                                     |
-| `Bytes`                                       | Raw request / response bodies (webhooks, downloads). No JSON envelope.      |
-| `stream[T]`                                   | Typed Server-Sent Events. `AsyncIterable<T>` on the client.                 |
-| `@raises(Err1, Err2, ...)`                    | Typed errors → `Result<T, Err1 \| Err2>` on the client, narrowable by kind. |
-| `Context`                                     | Shape the response: status, headers, cookies, after-hooks.                  |
-| `Depends(provider)`                           | FastAPI-shape dependency injection. Plain / async / generator providers.    |
-| `after(fn, *args, **kw)`                      | Run a callback after the response is sent.                                  |
-| `mount_task_routes(...)`                      | Long-running jobs: submit + status + stream from one handler.               |
-| `dyadpy.otel.instrument(app)`                 | One OpenTelemetry span per request (optional extra: `dyadpy[otel]`).        |
-| `dyadpy openapi / swift / kotlin` (CLI)       | Emit OpenAPI 3.1, Swift, or Kotlin clients off the same IR.                 |
+**Rename a Python field — TS lights up in red.**
 
-Full surface in [`docs/reference.md`](./docs/reference.md).
+```diff
+ class User(msgspec.Struct):
+     id: int
+-    email: str
++    contact_email: str
+```
+
+```ts
+user.email;
+//   ~~~~~ Property 'email' does not exist on type 'User'.
+//         Did you mean 'contactEmail'?
+```
+
+Save Python. Your editor tells you exactly which call sites to fix. No grep, no broken prod.
+
+**Add an endpoint — autocomplete picks it up instantly.**
+
+```python
+@app.post("/orders")
+async def create_order(order: NewOrder) -> Order: ...
+```
+
+```ts
+api.cr|
+//   ^ createOrder  ← appears the moment you save Python
+```
+
+**Errors as discriminated unions — forget a case, get a compile error.**
+
+```python
+@raises(NotFound, Forbidden)
+async def get_user(user_id: int) -> User: ...
+```
+
+```ts
+const result = await api.getUser({ userId: 1 });
+if (!result.ok) {
+  switch (result.error.kind) {
+    case "NotFound":
+      /* ... */ break;
+    case "Forbidden":
+      /* ... */ break;
+    // add a third @raises later? the compiler flags this switch as non-exhaustive.
+  }
+}
+```
+
+**Typed streaming with no extra plumbing.**
+
+```python
+@app.get("/build/{id}/events")
+async def watch_build(id: int) -> stream[BuildLog]: ...
+```
+
+```ts
+for await (const log of api.watchBuild({ id: 42 })) {
+  log.level; // "info" | "warn" | "error" — autocomplete works
+}
+```
+
+**One file you can read.** The generated client is a single `client.ts` — diff it in PRs, grep it for routes, paste it into a gist. Not a black-box artifact buried in `node_modules`.
+
+**No codegen step in your head.** No `pnpm gen`, no `buf gen`, no `npm run codegen` to remember. `dyadpy dev` watches Python and writes the client atomically. If it's in your editor, it's in the client.
+
+Full primitives in [`docs/reference.md`](./docs/reference.md).
 
 ## Install
 
