@@ -1,4 +1,4 @@
-"""Run identical scenarios against Tythe / FastAPI / Litestar and report numbers.
+"""Run identical scenarios against Dyadpy / FastAPI / Litestar and report numbers.
 
 Each framework gets its own uvicorn subprocess so the ASGI server is held
 constant. The driver measures cold-start (time from process spawn to first
@@ -10,7 +10,7 @@ Usage::
 
     uv run bench.py                # full matrix, default duration
     uv run bench.py --duration 5   # quick smoke
-    uv run bench.py --frameworks tythe fastapi   # subset
+    uv run bench.py --frameworks dyadpy fastapi   # subset
 
 Results land in ``results/<timestamp>/`` as JSON + a Markdown summary.
 """
@@ -43,11 +43,11 @@ RESULTS = ROOT / "results"
 @dataclass(slots=True)
 class Framework:
     name: str
-    module: str  # uvicorn target, e.g. "tythe_app:app"
+    module: str  # uvicorn target, e.g. "dyadpy_app:app"
 
 
 FRAMEWORKS: list[Framework] = [
-    Framework(name="tythe", module="tythe_app:app"),
+    Framework(name="dyadpy", module="dyadpy_app:app"),
     Framework(name="fastapi", module="fastapi_app:app"),
     Framework(name="litestar", module="litestar_app:app"),
 ]
@@ -266,7 +266,7 @@ async def _benchmark_one(
 
 def _markdown_report(results: list[FrameworkResult]) -> str:
     lines: list[str] = []
-    lines.append("# Tythe benchmark — vs FastAPI + Litestar")
+    lines.append("# Dyadpy benchmark — vs FastAPI + Litestar")
     lines.append("")
     lines.append("Identical handlers across all three frameworks, served by uvicorn,")
     lines.append("driven by an in-process asyncio + httpx client. Numbers measure")
@@ -326,7 +326,7 @@ async def main() -> None:
     outdir = RESULTS / stamp
     outdir.mkdir(parents=True, exist_ok=True)
 
-    print(f"# tythe benchmarks — duration={args.duration}s, concurrency={args.concurrency}")
+    print(f"# dyadpy benchmarks — duration={args.duration}s, concurrency={args.concurrency}")
     print(f"# output: {outdir.relative_to(ROOT)}/")
     print()
 

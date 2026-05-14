@@ -9,7 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@tythe/ts": "workspace:*",
+    "@dyadpy/ts": "workspace:*",
     "react": "^19.2.6",
     "react-dom": "^19.2.6"
   },

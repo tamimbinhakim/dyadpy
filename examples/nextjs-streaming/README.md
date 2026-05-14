@@ -1,6 +1,6 @@
 # Example · Next.js typed streaming
 
-A streaming demo built on Tythe's fundamentals: typed events over SSE,
+A streaming demo built on Dyadpy's fundamentals: typed events over SSE,
 discriminated-union narrowing on the client, cancellation via
 `AbortSignal`. No third-party services, no API keys, runs on a single
 machine.
@@ -21,7 +21,7 @@ typed events to client" use case.
 # server/app.py
 import asyncio
 import msgspec
-from tythe import App, stream
+from dyadpy import App, stream
 
 app = App()
 
@@ -51,7 +51,7 @@ async def watch_job(job_id: str) -> stream[Progress | Log | Done]:
 ```tsx
 // frontend/app/jobs/[id]/page.tsx
 "use client";
-import { api } from "@/lib/tythe/client";
+import { api } from "@/lib/dyadpy/client";
 import { useEffect, useState } from "react";
 
 export default function JobPage({ params }: { params: { id: string } }) {
@@ -90,7 +90,7 @@ export default function JobPage({ params }: { params: { id: string } }) {
 # Terminal 1 — server
 cd examples/nextjs-streaming/server
 uv sync
-uv run tythe dev app:app --out ../frontend/src/lib/tythe/client.ts
+uv run dyadpy dev app:app --out ../frontend/src/lib/dyadpy/client.ts
 
 # Terminal 2 — frontend
 cd examples/nextjs-streaming/frontend
@@ -112,4 +112,4 @@ the log lines append, and the summary appear when the job finishes.
 
 > The same wire shape carries LLM token streams, pubsub feeds, log
 > tails, partial responses — anything where the server pushes typed
-> events to the client. Tythe doesn't care what's inside the events.
+> events to the client. Dyadpy doesn't care what's inside the events.

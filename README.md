@@ -1,14 +1,12 @@
 <div align="center">
 
-# Tythe
-
-_pronounced **"tythe"** — rhymes with "scythe" (`/taɪð/`)_
+# Dyadpy
 
 **Write a Python handler. Call it from TypeScript with full types. No DTOs, no OpenAPI codegen, no broken types after a refactor.**
 
-[![CI](https://github.com/tamimbinhakim/tythe/actions/workflows/ci.yml/badge.svg)](https://github.com/tamimbinhakim/tythe/actions/workflows/ci.yml)
-[![PyPI](https://img.shields.io/pypi/v/tythe.svg)](https://pypi.org/project/tythe/)
-[![npm](https://img.shields.io/npm/v/@tythe/ts.svg)](https://www.npmjs.com/package/@tythe/ts)
+[![CI](https://github.com/tamimbinhakim/dyadpy/actions/workflows/ci.yml/badge.svg)](https://github.com/tamimbinhakim/dyadpy/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/dyadpy.svg)](https://pypi.org/project/dyadpy/)
+[![npm](https://img.shields.io/npm/v/@dyadpy/ts.svg)](https://www.npmjs.com/package/@dyadpy/ts)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
 [**Quickstart**](./docs/getting-started.md) · [**Docs**](./docs) · [**Examples**](./examples)
@@ -19,7 +17,7 @@ _pronounced **"tythe"** — rhymes with "scythe" (`/taɪð/`)_
 
 ```python
 # server/app.py
-from tythe import App
+from dyadpy import App
 import msgspec
 
 app = App()
@@ -36,13 +34,13 @@ async def get_user(user_id: int) -> User:
 
 ```ts
 // frontend/anywhere.tsx
-import { api } from "@/lib/tythe/client";
+import { api } from "@/lib/dyadpy/client";
 
 const user = await api.getUser({ userId: 1 });
 //    ^? User — full type, autocomplete, refactor-safe
 ```
 
-That's the whole loop. `tythe dev` rewrites `client.ts` every time you save Python, so the TS side is always in sync.
+That's the whole loop. `dyadpy dev` rewrites `client.ts` every time you save Python, so the TS side is always in sync.
 
 ## Why you'd use it
 
@@ -51,9 +49,9 @@ That's the whole loop. `tythe dev` rewrites `client.ts` every time you save Pyth
 - **Typed streaming out of the box.** `stream[T]` becomes `AsyncIterable<T>` on the client, with auto-reconnect on drop.
 - **Typed errors as discriminated unions.** `@raises(NotFound, Forbidden)` → `Result<T, NotFound | Forbidden>`. The compiler forces you to handle each case.
 - **One file, not twelve.** The generated client is a single `client.ts` you can read, diff, and grep.
-- **Framework-agnostic on both ends.** Python web framework: tythe (Starlette under the hood). Frontend: anything that runs TS — Next.js, Vite, SvelteKit, Astro, Solid Start.
-- **First-class hooks for the big three.** `@tythe/react` (TanStack Query), `@tythe/svelte` (stores), `@tythe/solid` (resources). Server-side prefetch helpers ship with each.
-- **Fast.** msgspec on the hot path — 2–30× faster than Pydantic v2 on decode/encode. Pydantic still ships as a first-class plugin (`tythe[pydantic]`).
+- **Framework-agnostic on both ends.** Python web framework: dyadpy (Starlette under the hood). Frontend: anything that runs TS — Next.js, Vite, SvelteKit, Astro, Solid Start.
+- **First-class hooks for the big three.** `@dyadpy/react` (TanStack Query), `@dyadpy/svelte` (stores), `@dyadpy/solid` (resources). Server-side prefetch helpers ship with each.
+- **Fast.** msgspec on the hot path — 2–30× faster than Pydantic v2 on decode/encode. Pydantic still ships as a first-class plugin (`dyadpy[pydantic]`).
 
 ## What it ships
 
@@ -71,8 +69,8 @@ That's the whole loop. `tythe dev` rewrites `client.ts` every time you save Pyth
 | `Depends(provider)`                           | FastAPI-shape dependency injection. Plain / async / generator providers.    |
 | `after(fn, *args, **kw)`                      | Run a callback after the response is sent.                                  |
 | `mount_task_routes(...)`                      | Long-running jobs: submit + status + stream from one handler.               |
-| `tythe.otel.instrument(app)`                  | One OpenTelemetry span per request (optional extra: `tythe[otel]`).         |
-| `tythe openapi / swift / kotlin` (CLI)        | Emit OpenAPI 3.1, Swift, or Kotlin clients off the same IR.                 |
+| `dyadpy.otel.instrument(app)`                 | One OpenTelemetry span per request (optional extra: `dyadpy[otel]`).        |
+| `dyadpy openapi / swift / kotlin` (CLI)       | Emit OpenAPI 3.1, Swift, or Kotlin clients off the same IR.                 |
 
 Full surface in [`docs/reference.md`](./docs/reference.md).
 
@@ -80,19 +78,19 @@ Full surface in [`docs/reference.md`](./docs/reference.md).
 
 ```bash
 # Server
-uv add tythe
+uv add dyadpy
 
 # Client runtime (any frontend)
-pnpm add @tythe/ts
+pnpm add @dyadpy/ts
 
 # Framework hooks (optional)
-pnpm add @tythe/react   # or @tythe/svelte / @tythe/solid
+pnpm add @dyadpy/react   # or @dyadpy/svelte / @dyadpy/solid
 ```
 
 ## Run
 
 ```bash
-tythe dev server.app:app --out ../frontend/src/lib/tythe/client.ts
+dyadpy dev server.app:app --out ../frontend/src/lib/dyadpy/client.ts
 ```
 
 What that does:
@@ -105,11 +103,11 @@ That's it. Walkthrough in [docs/getting-started.md](./docs/getting-started.md).
 
 ## How it compares
 
-|                     | **Tythe**                               | FastAPI + openapi-typescript | tRPC          | Connect-RPC              |
+|                     | **Dyadpy**                              | FastAPI + openapi-typescript | tRPC          | Connect-RPC              |
 | ------------------- | --------------------------------------- | ---------------------------- | ------------- | ------------------------ |
 | Backend lang        | **Python**                              | Python                       | TypeScript    | Polyglot                 |
 | DTO duplication     | **None**                                | Yes                          | None          | Yes (`.proto`)           |
-| Codegen step        | **Invisible (`tythe dev`)**             | Manual rerun                 | None          | `buf gen`                |
+| Codegen step        | **Invisible (`dyadpy dev`)**            | Manual rerun                 | None          | `buf gen`                |
 | Streaming type-safe | **Yes (typed SSE)**                     | Manual                       | Subscriptions | Yes                      |
 | Typed errors → TS   | **Discriminated union**                 | HTTP codes                   | `TRPCError`   | Yes                      |
 | Best for            | **Python backend + modern TS frontend** | External clients             | TS monorepo   | Cross-team microservices |
@@ -120,13 +118,13 @@ Server-rendered first paint with no waterfall. Each framework has a prefetch hel
 
 ```tsx
 // Next.js App Router
-import { prefetchQuery } from "@tythe/react/server";
+import { prefetchQuery } from "@dyadpy/react/server";
 await prefetchQuery(queryClient, api, "getUser", { userId: 1 });
 ```
 
 ```ts
 // SvelteKit
-import { loadQuery } from "@tythe/svelte/server";
+import { loadQuery } from "@dyadpy/svelte/server";
 export const load = (event) => ({
   me: await loadQuery(api, "me", undefined, event),
 });
@@ -134,7 +132,7 @@ export const load = (event) => ({
 
 ```tsx
 // Solid Start
-import { serverQuery } from "@tythe/solid/server";
+import { serverQuery } from "@dyadpy/solid/server";
 return serverQuery(api, "me", undefined, event.request);
 ```
 
@@ -142,13 +140,13 @@ Auth/cookies/tracing headers forward automatically via [`forwardHeaders`](./docs
 
 ## Packages
 
-| Package                                          | What it is                                                                                  | Status |
-| ------------------------------------------------ | ------------------------------------------------------------------------------------------- | ------ |
-| [`tythe`](./packages/tythe) (PyPI)               | Python framework, CLI, codegen.                                                             | v0.1   |
-| [`@tythe/ts`](./packages/tythe-ts) (npm)         | ~3 KB framework-agnostic TS runtime. Works with any frontend.                               | v0.1   |
-| [`@tythe/react`](./packages/tythe-react) (npm)   | React hooks (`useQuery`, `useMutation`, `useSubscription`) on TanStack Query + SSR helpers. | v0.1   |
-| [`@tythe/svelte`](./packages/tythe-svelte) (npm) | Svelte 5 store bindings + SSR helpers.                                                      | v0.1   |
-| [`@tythe/solid`](./packages/tythe-solid) (npm)   | SolidJS resource bindings + SSR helpers.                                                    | v0.1   |
+| Package                                            | What it is                                                                                  | Status |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------- | ------ |
+| [`dyadpy`](./packages/dyadpy) (PyPI)               | Python framework, CLI, codegen.                                                             | v0.1   |
+| [`@dyadpy/ts`](./packages/dyadpy-ts) (npm)         | ~3 KB framework-agnostic TS runtime. Works with any frontend.                               | v0.1   |
+| [`@dyadpy/react`](./packages/dyadpy-react) (npm)   | React hooks (`useQuery`, `useMutation`, `useSubscription`) on TanStack Query + SSR helpers. | v0.1   |
+| [`@dyadpy/svelte`](./packages/dyadpy-svelte) (npm) | Svelte 5 store bindings + SSR helpers.                                                      | v0.1   |
+| [`@dyadpy/solid`](./packages/dyadpy-solid) (npm)   | SolidJS resource bindings + SSR helpers.                                                    | v0.1   |
 
 ## Stability
 

@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 import msgspec
-from tythe import App, raises, stream
+from dyadpy import App, raises, stream
 
 app = App()
 
@@ -124,7 +124,7 @@ async def watch_deployment(job_id: str) -> stream[DeployEvent]:
         return
 
     yield Deployed(
-        url=f"https://{job_id}.tythe-demo.dev",
+        url=f"https://{job_id}.dyadpy-demo.dev",
         revision="rev_abc123",
         elapsed_seconds=time.time() - started,
     )

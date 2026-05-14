@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { api } from "../lib/tythe/client";
+import { api } from "../lib/dyadpy/client";
 
 const AUTH = { authorization: "Bearer 1" };
 
-// The same request, two ways. The Tythe button on the right is live against
+// The same request, two ways. The Dyadpy button on the right is live against
 // the running server; the FastAPI column shows what you'd be writing today
 // with `fastapi` + `openapi-typescript` (or @hey-api/openapi-ts, Orval, Kubb —
 // they all share the same shape of pain).
@@ -47,7 +47,7 @@ async function load(issueId: number) {
   return "unknown error";                          // ← no exhaustiveness check
 }`;
 
-const TYTHE_CODE = `// tythe-server side:
+const DYADPY_CODE = `// dyadpy-server side:
 //   @dataclass
 //   class IssueNotFound(Exception): issue_id: int
 //   @dataclass
@@ -56,8 +56,8 @@ const TYTHE_CODE = `// tythe-server side:
 //   @raises(IssueNotFound, Forbidden)
 //   async def get_issue(issue_id: int) -> Issue: ...
 
-// after \`tythe dev\`:
-import { api } from "@/lib/tythe/client";          // 4 KB, one file
+// after \`dyadpy dev\`:
+import { api } from "@/lib/dyadpy/client";          // 4 KB, one file
 
 async function load(issueId: number) {
   const result = await api.getIssue(               // method, not path string
@@ -79,7 +79,7 @@ async function load(issueId: number) {
 }`;
 
 export function VsFastapi() {
-  const [out, setOut] = useState("Click 'run live' to call the Tythe path.");
+  const [out, setOut] = useState("Click 'run live' to call the Dyadpy path.");
 
   async function go() {
     const result = await api.getIssue({ issueId: 999 }, { headers: AUTH });
@@ -128,7 +128,7 @@ export function VsFastapi() {
           code={FASTAPI_CODE}
         />
         <Column
-          title="Tythe"
+          title="Dyadpy"
           tone="#2a8049"
           summary={[
             "✓  Method named like a function: api.getIssue(...).",
@@ -137,12 +137,12 @@ export function VsFastapi() {
             "✓  result.error.kind is the discriminator — switch narrows each branch.",
             "✓  Add or remove a variant on the server → build break on every regen.",
           ]}
-          code={TYTHE_CODE}
+          code={DYADPY_CODE}
         />
       </div>
 
       <div style={{ display: "flex", gap: 8, marginTop: 16, alignItems: "center" }}>
-        <button onClick={go}>run live (Tythe path)</button>
+        <button onClick={go}>run live (Dyadpy path)</button>
         <span style={{ color: "#888", fontSize: 13 }}>
           Calls <code>api.getIssue(&#123; issueId: 999 &#125;)</code> against this example's server.
         </span>
@@ -151,7 +151,7 @@ export function VsFastapi() {
 
       <p style={{ color: "#888", fontSize: 12, marginTop: 24 }}>
         Other generators (@hey-api/openapi-ts, Orval, Kubb) produce variations on the same shape.
-        Tythe's trick isn't the codegen template — it's that the Python signature is the IR. No DTO
+        Dyadpy's trick isn't the codegen template — it's that the Python signature is the IR. No DTO
         file, no OpenAPI round-trip, no name mangling.
       </p>
     </section>

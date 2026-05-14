@@ -25,8 +25,8 @@
 *.woff2    binary
 
 # Generated files - hide from PR diffs
-packages/tythe-client/dist/** linguist-generated
-**/lib/tythe/client.ts        linguist-generated
+packages/dyadpy-client/dist/** linguist-generated
+**/lib/dyadpy/client.ts        linguist-generated
 CHANGELOG.md                  linguist-generated
 pnpm-lock.yaml                linguist-generated
 uv.lock                       linguist-generated

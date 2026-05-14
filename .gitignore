@@ -75,11 +75,11 @@ htmlcov/
 !.claude/settings.json
 !.claude/commands/
 
-# ---- Tythe ----
-.tythe/
+# ---- Dyadpy ----
+.dyadpy/
 # Generated TS clients in examples are gitignored;
 # regenerated on dev. Comment out if you want them committed.
-**/lib/tythe/client.ts
+**/lib/dyadpy/client.ts
 
 # ---- Benchmarks ----
 benchmarks/results/

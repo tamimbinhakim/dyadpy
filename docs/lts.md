@@ -1,6 +1,6 @@
 # Long-term support
 
-This page describes the support window for Tythe releases.
+This page describes the support window for Dyadpy releases.
 
 ## Active lines
 
@@ -43,11 +43,11 @@ A fix is **not** backported if:
 For pre-1.0 (now):
 
 ```bash
-uv add 'tythe==0.1.0'              # PyPI
-pnpm add '@tythe/ts@0.1.0' \
-        '@tythe/react@0.1.0' \
-        '@tythe/svelte@0.1.0' \
-        '@tythe/solid@0.1.0'       # npm
+uv add 'dyadpy==0.1.0'              # PyPI
+pnpm add '@dyadpy/ts@0.1.0' \
+        '@dyadpy/react@0.1.0' \
+        '@dyadpy/svelte@0.1.0' \
+        '@dyadpy/solid@0.1.0'       # npm
 ```
 
 After 1.0, pin to a minor with `^1.x` (or `>=1.x.y,<2`) and trust

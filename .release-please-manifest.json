@@ -1,7 +1,7 @@
 {
-  "packages/tythe": "0.1.0",
-  "packages/tythe-ts": "0.1.0",
-  "packages/tythe-react": "0.1.0",
-  "packages/tythe-svelte": "0.1.0",
-  "packages/tythe-solid": "0.1.0"
+  "packages/dyadpy": "0.1.0",
+  "packages/dyadpy-ts": "0.1.0",
+  "packages/dyadpy-react": "0.1.0",
+  "packages/dyadpy-svelte": "0.1.0",
+  "packages/dyadpy-solid": "0.1.0"
 }

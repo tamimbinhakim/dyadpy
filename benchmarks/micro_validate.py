@@ -1,6 +1,6 @@
 """Microbench: body validation hot path, isolated from HTTP.
 
-Measures the cost Tythe pays to turn raw JSON bytes into a typed body
+Measures the cost Dyadpy pays to turn raw JSON bytes into a typed body
 struct, comparing the fast path (one-shot ``msgspec.json.Decoder(T)``)
 against the legacy two-pass (``msgspec.json.decode`` → ``msgspec.convert``).
 

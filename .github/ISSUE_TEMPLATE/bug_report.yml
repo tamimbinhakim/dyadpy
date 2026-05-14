@@ -26,10 +26,10 @@ body:
     validations: { required: true }
 
   - type: input
-    id: tythe-version
+    id: dyadpy-version
     attributes:
-      label: Tythe version
-      placeholder: "0.1.3 (run `tythe --version`)"
+      label: Dyadpy version
+      placeholder: "0.1.3 (run `dyadpy --version`)"
     validations: { required: true }
 
   - type: input
@@ -64,4 +64,4 @@ body:
       label: Pre-flight
       options:
         - { label: "I searched existing issues and discussions", required: true }
-        - { label: "I'm on the latest version of `tythe`", required: false }
+        - { label: "I'm on the latest version of `dyadpy`", required: false }

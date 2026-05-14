@@ -1,4 +1,4 @@
-# Tythe docs
+# Dyadpy docs
 
 - **[Getting started](./getting-started.md)** — install, write a handler, see typed autocomplete on the TS side in 5 minutes.
 - **[Reference](./reference.md)** — every primitive in one page. The thing you'll keep open in a tab.

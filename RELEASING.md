@@ -1,16 +1,16 @@
-# Releasing Tythe
+# Releasing Dyadpy
 
 A maintainer-facing checklist. Everything in here must be true before
-`tythe-v0.1.0` (PyPI) or `@tythe/*-v0.1.0` (npm) gets published. Run top
+`dyadpy-v0.1.0` (PyPI) or `@dyadpy/*-v0.1.0` (npm) gets published. Run top
 to bottom, tick boxes as you go.
 
-> Tythe is a **monorepo with 5 publishable packages**:
+> Dyadpy is a **monorepo with 5 publishable packages**:
 >
-> - `tythe` — PyPI
-> - `@tythe/ts` — npm (public)
-> - `@tythe/react` — npm (public)
-> - `@tythe/svelte` — npm (public)
-> - `@tythe/solid` — npm (public)
+> - `dyadpy` — PyPI
+> - `@dyadpy/ts` — npm (public)
+> - `@dyadpy/react` — npm (public)
+> - `@dyadpy/svelte` — npm (public)
+> - `@dyadpy/solid` — npm (public)
 >
 > Tags follow `release-please-config.json`: `<component>-vX.Y.Z`.
 
@@ -20,7 +20,7 @@ to bottom, tick boxes as you go.
 
 ```bash
 # Python
-cd packages/tythe
+cd packages/dyadpy
 uv sync --all-extras --dev
 uv run pytest -q
 uv run ruff check .
@@ -51,23 +51,23 @@ pnpm exec prettier --check "**/*.{md,json,yaml,yml}"
 For each publishable package, verify the tarball / wheel includes only
 what should ship.
 
-**Python (`packages/tythe`)**
+**Python (`packages/dyadpy`)**
 
 ```bash
-cd packages/tythe
+cd packages/dyadpy
 rm -rf dist
 uv build
-unzip -l dist/tythe-*-py3-none-any.whl
+unzip -l dist/dyadpy-*-py3-none-any.whl
 ```
 
-- [ ] `tythe/py.typed` is present (PEP 561 marker)
+- [ ] `dyadpy/py.typed` is present (PEP 561 marker)
 - [ ] All 12 modules included (`__init__`, `_idents`, `_pydantic`, `app`,
       `cli`, `codegen`, `context`, `errors`, `ir`, `openapi`, `otel`,
       `params`, `polyglot`, `runtime`, `streaming`, `tasks`)
 - [ ] `METADATA` shows correct version, description, classifiers, license, optional extras
-- [ ] `entry_points.txt` registers the `tythe` CLI script
+- [ ] `entry_points.txt` registers the `dyadpy` CLI script
 
-**TypeScript (each of `tythe-ts`, `tythe-react`, `tythe-svelte`, `tythe-solid`)**
+**TypeScript (each of `dyadpy-ts`, `dyadpy-react`, `dyadpy-svelte`, `dyadpy-solid`)**
 
 ```bash
 cd packages/<name>
@@ -89,7 +89,7 @@ Per package, confirm:
 - [ ] `.release-please-manifest.json` reflects the version about to ship
       for every package
 - [ ] `release-please-config.json` `extra-files` entries (e.g.
-      `packages/tythe/src/tythe/__init__.py` `__version__`) match
+      `packages/dyadpy/src/dyadpy/__init__.py` `__version__`) match
 - [ ] Each package's `CHANGELOG.md` has a real release section (not
       just `[Unreleased]`)
 - [ ] `CHANGELOG.md` entries are user-facing (not commit-ese); breaking
@@ -101,9 +101,9 @@ Per package, confirm:
 - [ ] `README.md` quickstart copy-pastes without edits
 - [ ] `docs/getting-started.md` walks end-to-end from clean install
 - [ ] `docs/reference.md` matches actual exports (`__all__` in
-      `packages/tythe/src/tythe/__init__.py` + `packages/tythe-ts/src/index.ts`)
+      `packages/dyadpy/src/dyadpy/__init__.py` + `packages/dyadpy-ts/src/index.ts`)
 - [ ] All package READMEs reference the right install commands
-      (`uv add tythe`, `pnpm add @tythe/<name>`)
+      (`uv add dyadpy`, `pnpm add @dyadpy/<name>`)
 - [ ] `ROADMAP.md` reflects what shipped
 - [ ] Badge URLs in `README.md` point at the correct workflows / registries
 - [ ] No links go to `localhost`, `127.0.0.1`, or local file paths
@@ -121,16 +121,16 @@ Per package, confirm:
 
 **PyPI**
 
-- [ ] `tythe` project name not taken (check pypi.org/project/tythe/)
-- [ ] PyPI Trusted Publisher configured for `tamimbinhakim/tythe`,
+- [ ] `dyadpy` project name not taken (check pypi.org/project/dyadpy/)
+- [ ] PyPI Trusted Publisher configured for `tamimbinhakim/dyadpy`,
       `release.yml`, environment `pypi`
 - [ ] No `PYPI_TOKEN` lying around in old workflows (we use OIDC)
 - [ ] GitHub environment `pypi` exists with deployment protection on `main`
 
 **npm**
 
-- [ ] `@tythe` org claimed on npm
-- [ ] `tamimbinhakim` is a member of `@tythe` with `publish` permission
+- [ ] `@dyadpy` org claimed on npm
+- [ ] `tamimbinhakim` is a member of `@dyadpy` with `publish` permission
 - [ ] `NPM_TOKEN` (automation, 2FA-bypassing) added as repository secret
 - [ ] `npm whoami` works locally if you need to debug
 
@@ -150,9 +150,9 @@ Per package, confirm:
 
 Drafted in GitHub Releases, **NOT** auto-published yet:
 
-- [ ] One release per package (5 total): `tythe-v0.1.0`,
-      `tythe-ts-v0.1.0`, `tythe-react-v0.1.0`, `tythe-svelte-v0.1.0`,
-      `tythe-solid-v0.1.0`
+- [ ] One release per package (5 total): `dyadpy-v0.1.0`,
+      `dyadpy-ts-v0.1.0`, `dyadpy-react-v0.1.0`, `dyadpy-svelte-v0.1.0`,
+      `dyadpy-solid-v0.1.0`
 - [ ] Each release links its CHANGELOG entry and lists install command
 - [ ] Top-level "v0.1.0 — initial release" announcement post drafted
       separately if needed
@@ -164,16 +164,16 @@ minutes, the install path is broken.
 
 ```bash
 # Server
-mkdir /tmp/tythe-smoke && cd /tmp/tythe-smoke
-uv init && uv add tythe
+mkdir /tmp/dyadpy-smoke && cd /tmp/dyadpy-smoke
+uv init && uv add dyadpy
 mkdir server && cat > server/app.py <<'EOF'
-from tythe import App
+from dyadpy import App
 app = App()
 @app.get("/ping")
 async def ping() -> dict[str, str]:
     return {"ok": "yes"}
 EOF
-uv run tythe dev server.app:app --out client.ts &
+uv run dyadpy dev server.app:app --out client.ts &
 sleep 2
 
 # Hit the live server
@@ -184,10 +184,10 @@ cat client.ts | head -20
 kill %1
 ```
 
-- [ ] `uv add tythe` works
-- [ ] `tythe dev` starts, writes a non-empty `client.ts`, server responds 200
-- [ ] `pnpm add @tythe/ts` works in a fresh Node project
-- [ ] The generated `client.ts` imports from `@tythe/ts` without errors
+- [ ] `uv add dyadpy` works
+- [ ] `dyadpy dev` starts, writes a non-empty `client.ts`, server responds 200
+- [ ] `pnpm add @dyadpy/ts` works in a fresh Node project
+- [ ] The generated `client.ts` imports from `@dyadpy/ts` without errors
 
 ## 10. Pull the trigger
 
@@ -199,7 +199,7 @@ Once everything above is ticked:
 3. The merge triggers `release.yml`, which:
    - Creates GitHub Releases for each bumped component.
    - Publishes the Python wheel via PyPI Trusted Publishing.
-   - Publishes each `@tythe/*` package to npm with provenance.
+   - Publishes each `@dyadpy/*` package to npm with provenance.
 4. Verify install from a fresh machine (re-run §9 against the
    registry, not source).
 5. Post the announcement.

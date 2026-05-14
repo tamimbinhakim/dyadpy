@@ -1,8 +1,8 @@
 # Versioning policy
 
-Tythe follows [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
-Each package (`tythe`, `@tythe/ts`, `@tythe/react`, `@tythe/svelte`,
-`@tythe/solid`) versions independently — managed by `release-please` off
+Dyadpy follows [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
+Each package (`dyadpy`, `@dyadpy/ts`, `@dyadpy/react`, `@dyadpy/svelte`,
+`@dyadpy/solid`) versions independently — managed by `release-please` off
 the manifest at `.release-please-manifest.json`.
 
 ## What semver means here
@@ -43,7 +43,7 @@ After 1.0:
 
 ## How CI enforces it
 
-- **`tythe diff` in CI** compares the IR snapshot from `main` to the IR
+- **`dyadpy diff` in CI** compares the IR snapshot from `main` to the IR
   snapshot built from each PR. Breaking changes annotate the PR with
   GitHub error annotations and fail the required check.
 - **release-please** classifies commits via Conventional Commits. A
@@ -56,7 +56,7 @@ After 1.0:
 
 Once a name appears in `__all__` (Python) or `index.ts` (TS), it is
 public and follows the rules above. Anything imported via a private
-underscore-prefixed module (`tythe._pydantic`, `tythe._idents`, …) is
+underscore-prefixed module (`dyadpy._pydantic`, `dyadpy._idents`, …) is
 not part of the contract and may change in any release.
 
 ## What is _not_ semver-governed
@@ -64,11 +64,11 @@ not part of the contract and may change in any release.
 - **Internal implementation details.** Refactors that don't change
   observable behavior or the public surface are not breaking, even if
   they reshape modules.
-- **Performance characteristics.** Tythe aims to be fast, but a
+- **Performance characteristics.** Dyadpy aims to be fast, but a
   measurable regression in p99 latency is a bug to be fixed, not a
   semver event.
 - **Dev dependencies.** Bumping ruff or vitest versions is never a
   breaking change for downstream consumers.
 - **Examples (`examples/*`).** Examples are reference material, not API.
-- **The `tythe-kit` meta-framework** (if and when it ships) versions
+- **The `dyadpy-kit` meta-framework** (if and when it ships) versions
   separately.

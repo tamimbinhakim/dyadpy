@@ -53,7 +53,7 @@
     "**/node_modules/**",
     "**/coverage/**",
     "**/*.generated.ts",
-    "**/lib/tythe/client.ts"
+    "**/lib/dyadpy/client.ts"
   ],
   "overrides": [
     {

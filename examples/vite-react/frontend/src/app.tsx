@@ -20,7 +20,7 @@ export function App() {
   const Page = (PAGES.find((p) => p.slug === active) ?? PAGES[0]).Component;
   return (
     <main style={{ fontFamily: "system-ui, sans-serif", maxWidth: 880, margin: "32px auto" }}>
-      <h1 style={{ marginBottom: 4 }}>Tythe · type-safety tour</h1>
+      <h1 style={{ marginBottom: 4 }}>Dyadpy · type-safety tour</h1>
       <p style={{ color: "#666", marginTop: 0 }}>
         Each page demos one thing the generated client buys you. Open the source — what TypeScript
         sees is the whole show.

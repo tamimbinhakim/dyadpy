@@ -1,55 +1,55 @@
-# Tythe
+# Dyadpy
 
-> Tythe is a type-safe RPC bridge between Python and TypeScript. The
-> Python function signature is the contract — Tythe extracts an IR from
+> Dyadpy is a type-safe RPC bridge between Python and TypeScript. The
+> Python function signature is the contract — Dyadpy extracts an IR from
 > your handlers via `inspect` + `typing.get_type_hints` + `msgspec`'s
 > JSON Schema export, then writes a single typed `client.ts` into your
 > frontend. No DTO duplication, no OpenAPI round-trip, no `Body_create_post_posts_post`.
 
-Tythe ships at the wire level: HTTP routes, body/param markers, typed
+Dyadpy ships at the wire level: HTTP routes, body/param markers, typed
 streaming via SSE, typed errors as discriminated unions, post-response
 hooks, dependency injection. Nothing higher-level (no auth, no rate
 limiting, no LLM types in core). The IR is JSON Schema 2020-12 plus a
-thin Tythe layer for streams/errors/tasks, so other languages (Swift,
+thin Dyadpy layer for streams/errors/tasks, so other languages (Swift,
 Kotlin, anything that can read JSON Schema) can consume the same
 contract.
 
-Two halves on disk: `tythe` (Python, PyPI) is the framework + CLI +
-codegen; `@tythe/ts` (npm, ~3 KB) is the framework-agnostic runtime
+Two halves on disk: `dyadpy` (Python, PyPI) is the framework + CLI +
+codegen; `@dyadpy/ts` (npm, ~3 KB) is the framework-agnostic runtime
 your generated `client.ts` imports. Framework adapters
-(`@tythe/react`, `@tythe/svelte`, `@tythe/solid`) wrap the client in
+(`@dyadpy/react`, `@dyadpy/svelte`, `@dyadpy/solid`) wrap the client in
 idiomatic primitives.
 
 ## Docs
 
-- [Getting started](https://github.com/tamimbinhakim/tythe/blob/main/docs/getting-started.md): five-minute install + write a handler + see the generated client.
-- [Reference](https://github.com/tamimbinhakim/tythe/blob/main/docs/reference.md): every primitive Tythe exports, with the smallest working example for each.
-- [Architecture](https://github.com/tamimbinhakim/tythe/blob/main/docs/architecture.md): what happens when you type `tythe dev` — IR extraction, ASGI dispatch, codegen, dev loop.
-- [Design](https://github.com/tamimbinhakim/tythe/blob/main/docs/design.md): the "why" behind every "what" — why msgspec, why SSE, why no OpenAPI by default.
-- [Auth recipes](https://github.com/tamimbinhakim/tythe/blob/main/docs/auth.md): JWT, sessions, NextAuth — wiring `Depends(current_user)` to your provider.
-- [SSR](https://github.com/tamimbinhakim/tythe/blob/main/docs/ssr.md): server-side rendering with Next.js App Router, SvelteKit, and Solid Start — prefetch + hydrate helpers, header forwarding, the CSR-safety contract.
-- [IR stability](https://github.com/tamimbinhakim/tythe/blob/main/docs/ir-stability.md): additive-only invariants on the JSON-Schema IR and the on-the-wire envelope.
-- [Semver policy](https://github.com/tamimbinhakim/tythe/blob/main/docs/semver.md): what counts as a break and the deprecation cycle.
-- [LTS policy](https://github.com/tamimbinhakim/tythe/blob/main/docs/lts.md): support windows, backport policy, EOL rules.
+- [Getting started](https://github.com/tamimbinhakim/dyadpy/blob/main/docs/getting-started.md): five-minute install + write a handler + see the generated client.
+- [Reference](https://github.com/tamimbinhakim/dyadpy/blob/main/docs/reference.md): every primitive Dyadpy exports, with the smallest working example for each.
+- [Architecture](https://github.com/tamimbinhakim/dyadpy/blob/main/docs/architecture.md): what happens when you type `dyadpy dev` — IR extraction, ASGI dispatch, codegen, dev loop.
+- [Design](https://github.com/tamimbinhakim/dyadpy/blob/main/docs/design.md): the "why" behind every "what" — why msgspec, why SSE, why no OpenAPI by default.
+- [Auth recipes](https://github.com/tamimbinhakim/dyadpy/blob/main/docs/auth.md): JWT, sessions, NextAuth — wiring `Depends(current_user)` to your provider.
+- [SSR](https://github.com/tamimbinhakim/dyadpy/blob/main/docs/ssr.md): server-side rendering with Next.js App Router, SvelteKit, and Solid Start — prefetch + hydrate helpers, header forwarding, the CSR-safety contract.
+- [IR stability](https://github.com/tamimbinhakim/dyadpy/blob/main/docs/ir-stability.md): additive-only invariants on the JSON-Schema IR and the on-the-wire envelope.
+- [Semver policy](https://github.com/tamimbinhakim/dyadpy/blob/main/docs/semver.md): what counts as a break and the deprecation cycle.
+- [LTS policy](https://github.com/tamimbinhakim/dyadpy/blob/main/docs/lts.md): support windows, backport policy, EOL rules.
 
 ## Source
 
-- [packages/tythe](https://github.com/tamimbinhakim/tythe/tree/main/packages/tythe): Python framework, CLI, IR builder, codegen.
-- [packages/tythe-ts](https://github.com/tamimbinhakim/tythe/tree/main/packages/tythe-ts): framework-agnostic TS runtime — `createClient`, `parseSSE`, `Result<T, E>`.
-- [packages/tythe-react](https://github.com/tamimbinhakim/tythe/tree/main/packages/tythe-react): React hooks (`useQuery`, `useMutation`, `useSubscription`) on TanStack Query.
-- [packages/tythe-svelte](https://github.com/tamimbinhakim/tythe/tree/main/packages/tythe-svelte): Svelte 5 store bindings.
-- [packages/tythe-solid](https://github.com/tamimbinhakim/tythe/tree/main/packages/tythe-solid): SolidJS resource bindings.
+- [packages/dyadpy](https://github.com/tamimbinhakim/dyadpy/tree/main/packages/dyadpy): Python framework, CLI, IR builder, codegen.
+- [packages/dyadpy-ts](https://github.com/tamimbinhakim/dyadpy/tree/main/packages/dyadpy-ts): framework-agnostic TS runtime — `createClient`, `parseSSE`, `Result<T, E>`.
+- [packages/dyadpy-react](https://github.com/tamimbinhakim/dyadpy/tree/main/packages/dyadpy-react): React hooks (`useQuery`, `useMutation`, `useSubscription`) on TanStack Query.
+- [packages/dyadpy-svelte](https://github.com/tamimbinhakim/dyadpy/tree/main/packages/dyadpy-svelte): Svelte 5 store bindings.
+- [packages/dyadpy-solid](https://github.com/tamimbinhakim/dyadpy/tree/main/packages/dyadpy-solid): SolidJS resource bindings.
 
 ## Examples
 
-- [examples/nextjs-streaming](https://github.com/tamimbinhakim/tythe/tree/main/examples/nextjs-streaming): Next.js App Router consuming a streaming endpoint.
-- [examples/vite-react](https://github.com/tamimbinhakim/tythe/tree/main/examples/vite-react): minimal Vite + React app with hooks.
-- [examples/sveltekit-counter](https://github.com/tamimbinhakim/tythe/tree/main/examples/sveltekit-counter): SvelteKit + Svelte stores.
+- [examples/nextjs-streaming](https://github.com/tamimbinhakim/dyadpy/tree/main/examples/nextjs-streaming): Next.js App Router consuming a streaming endpoint.
+- [examples/vite-react](https://github.com/tamimbinhakim/dyadpy/tree/main/examples/vite-react): minimal Vite + React app with hooks.
+- [examples/sveltekit-counter](https://github.com/tamimbinhakim/dyadpy/tree/main/examples/sveltekit-counter): SvelteKit + Svelte stores.
 
 ## Optional
 
-- [README](https://github.com/tamimbinhakim/tythe/blob/main/README.md): the elevator pitch, comparison table, philosophy.
-- [Roadmap](https://github.com/tamimbinhakim/tythe/blob/main/ROADMAP.md): what's planned and why.
-- [Contributing](https://github.com/tamimbinhakim/tythe/blob/main/CONTRIBUTING.md): how to file issues, send PRs, run tests locally.
-- [Releasing](https://github.com/tamimbinhakim/tythe/blob/main/RELEASING.md): the release process — `release-please`, PyPI + npm publishing.
-- [Full docs (single file)](https://github.com/tamimbinhakim/tythe/blob/main/llms-full.txt): every doc page concatenated, for LLMs with large contexts.
+- [README](https://github.com/tamimbinhakim/dyadpy/blob/main/README.md): the elevator pitch, comparison table, philosophy.
+- [Roadmap](https://github.com/tamimbinhakim/dyadpy/blob/main/ROADMAP.md): what's planned and why.
+- [Contributing](https://github.com/tamimbinhakim/dyadpy/blob/main/CONTRIBUTING.md): how to file issues, send PRs, run tests locally.
+- [Releasing](https://github.com/tamimbinhakim/dyadpy/blob/main/RELEASING.md): the release process — `release-please`, PyPI + npm publishing.
+- [Full docs (single file)](https://github.com/tamimbinhakim/dyadpy/blob/main/llms-full.txt): every doc page concatenated, for LLMs with large contexts.

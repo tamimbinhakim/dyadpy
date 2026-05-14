@@ -28,7 +28,7 @@
       "source.organizeImports.ruff": "explicit"
     }
   },
-  "python.defaultInterpreterPath": "${workspaceFolder}/packages/tythe/.venv/bin/python",
+  "python.defaultInterpreterPath": "${workspaceFolder}/packages/dyadpy/.venv/bin/python",
   "python.testing.pytestEnabled": true,
   "python.testing.unittestEnabled": false,
   "python.analysis.typeCheckingMode": "strict",

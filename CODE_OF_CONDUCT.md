@@ -56,7 +56,7 @@ repository, or by direct-messaging the maintainer
 ([@tamimbinhakim](https://github.com/tamimbinhakim)) on GitHub. All reports
 will be reviewed and investigated promptly and fairly.
 
-[report]: https://github.com/tamimbinhakim/tythe/security/advisories/new
+[report]: https://github.com/tamimbinhakim/dyadpy/security/advisories/new
 
 ## Attribution
 

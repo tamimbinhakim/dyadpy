@@ -22,35 +22,35 @@
     { "type": "chore", "section": "Chores", "hidden": true }
   ],
   "packages": {
-    "packages/tythe": {
+    "packages/dyadpy": {
       "release-type": "python",
-      "package-name": "tythe",
-      "component": "tythe",
+      "package-name": "dyadpy",
+      "component": "dyadpy",
       "changelog-path": "CHANGELOG.md",
-      "extra-files": ["src/tythe/__init__.py"]
+      "extra-files": ["src/dyadpy/__init__.py"]
     },
-    "packages/tythe-ts": {
+    "packages/dyadpy-ts": {
       "release-type": "node",
-      "package-name": "@tythe/ts",
-      "component": "tythe-ts",
+      "package-name": "@dyadpy/ts",
+      "component": "dyadpy-ts",
       "changelog-path": "CHANGELOG.md"
     },
-    "packages/tythe-react": {
+    "packages/dyadpy-react": {
       "release-type": "node",
-      "package-name": "@tythe/react",
-      "component": "tythe-react",
+      "package-name": "@dyadpy/react",
+      "component": "dyadpy-react",
       "changelog-path": "CHANGELOG.md"
     },
-    "packages/tythe-svelte": {
+    "packages/dyadpy-svelte": {
       "release-type": "node",
-      "package-name": "@tythe/svelte",
-      "component": "tythe-svelte",
+      "package-name": "@dyadpy/svelte",
+      "component": "dyadpy-svelte",
       "changelog-path": "CHANGELOG.md"
     },
-    "packages/tythe-solid": {
+    "packages/dyadpy-solid": {
       "release-type": "node",
-      "package-name": "@tythe/solid",
-      "component": "tythe-solid",
+      "package-name": "@dyadpy/solid",
+      "component": "dyadpy-solid",
       "changelog-path": "CHANGELOG.md"
     }
   }

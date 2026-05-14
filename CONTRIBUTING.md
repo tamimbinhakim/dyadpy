@@ -1,4 +1,4 @@
-# Contributing to Tythe
+# Contributing to Dyadpy
 
 First: thank you. Genuinely. Open source moves at the speed of the people who
 show up, and you showing up means a lot.
@@ -10,8 +10,8 @@ annoying, open a PR fixing it — meta-contributions count.
 ## TL;DR
 
 ```bash
-git clone https://github.com/tamimbinhakim/tythe.git
-cd tythe
+git clone https://github.com/tamimbinhakim/dyadpy.git
+cd dyadpy
 pnpm install               # installs Node deps + sets up husky hooks
 uv sync                    # installs Python deps into .venv
 pnpm test                  # run everything
@@ -24,10 +24,10 @@ You're set up. Make a branch, make a change, write a Conventional Commit, push.
 A pnpm monorepo with two real packages and a pile of supporting docs/examples:
 
 ```
-tythe/
+dyadpy/
 ├── packages/
-│   ├── tythe/          # Python framework (PyPI: tythe)
-│   └── tythe-ts/   # TS runtime (npm: @tythe/ts)
+│   ├── dyadpy/          # Python framework (PyPI: dyadpy)
+│   └── dyadpy-ts/   # TS runtime (npm: @dyadpy/ts)
 ├── examples/           # Runnable apps you can poke
 ├── docs/               # End-user documentation
 └── .github/            # CI, issue templates, the works
@@ -37,13 +37,13 @@ Both packages release together — see [release process](#releases) below.
 
 ## Prereqs
 
-| Tool   | Version          | Why                                                                                  |
-| ------ | ---------------- | ------------------------------------------------------------------------------------ |
-| Node   | ≥ 20             | Runs the toolchain (pnpm, husky, commitlint, oxlint, oxfmt).                         |
-| pnpm   | ≥ 9              | Workspace package manager. Don't use npm/yarn here.                                  |
-| Python | ≥ 3.11           | Tythe leans on modern typing (`from __future__ import annotations`, `X \| Y`, etc.). |
-| uv     | latest           | Python package manager. Way faster than pip.                                         |
-| Git    | any sane version | Obvious.                                                                             |
+| Tool   | Version          | Why                                                                                   |
+| ------ | ---------------- | ------------------------------------------------------------------------------------- |
+| Node   | ≥ 20             | Runs the toolchain (pnpm, husky, commitlint, oxlint, oxfmt).                          |
+| pnpm   | ≥ 9              | Workspace package manager. Don't use npm/yarn here.                                   |
+| Python | ≥ 3.11           | Dyadpy leans on modern typing (`from __future__ import annotations`, `X \| Y`, etc.). |
+| uv     | latest           | Python package manager. Way faster than pip.                                          |
+| Git    | any sane version | Obvious.                                                                              |
 
 > If you're on macOS, `brew install node pnpm uv python@3.12` covers it.
 
@@ -101,7 +101,7 @@ Scopes are optional but appreciated. Common ones: `codegen`, `ir`, `cli`,
 `client`, `docs`, `ci`, `deps`.
 
 If you're touching one package only, prefer that package as the scope
-(`feat(tythe): ...`, `fix(client): ...`).
+(`feat(dyadpy): ...`, `fix(client): ...`).
 
 ### Pre-commit
 
@@ -117,7 +117,7 @@ If the hook fails, fix the issue and re-stage. Don't bypass with
 ## Working on the Python package
 
 ```bash
-cd packages/tythe
+cd packages/dyadpy
 uv run pytest                  # full test suite
 uv run pytest -k streaming     # one test
 uv run ruff check .            # lint
@@ -128,8 +128,8 @@ uv run mypy src                # type-check
 The package layout:
 
 ```
-packages/tythe/
-├── src/tythe/
+packages/dyadpy/
+├── src/dyadpy/
 │   ├── __init__.py     # public API re-exports
 │   ├── app.py          # App, route decorators
 │   ├── context.py      # request Context, Depends
@@ -137,16 +137,16 @@ packages/tythe/
 │   ├── codegen.py      # IR → client.ts
 │   ├── streaming.py    # SSE encoder, stream[T]
 │   ├── errors.py       # @raises, Result envelope
-│   └── cli.py          # tythe dev / build / codegen / init
+│   └── cli.py          # dyadpy dev / build / codegen / init
 └── tests/
 ```
 
-When adding a new public symbol, re-export it from `tythe/__init__.py`.
+When adding a new public symbol, re-export it from `dyadpy/__init__.py`.
 
 ## Working on the TS client
 
 ```bash
-cd packages/tythe-ts
+cd packages/dyadpy-ts
 pnpm test                      # vitest
 pnpm test --watch              # watch mode
 pnpm build                     # tsup → dist/
@@ -193,7 +193,7 @@ Releases are automated via [release-please](https://github.com/googleapis/releas
 
 - Every merge to `main` updates a release PR.
 - Merging that release PR cuts versions, generates changelogs, tags, and
-  publishes both `tythe` (PyPI) and `@tythe/ts` (npm).
+  publishes both `dyadpy` (PyPI) and `@dyadpy/ts` (npm).
 - Versioning is driven by Conventional Commits: `feat:` → minor, `fix:` →
   patch, `feat!:` / `BREAKING CHANGE:` → major.
 
@@ -208,7 +208,7 @@ If you've found a bug:
 
 1. **A minimal reproduction beats everything.** A 20-line script that fails
    is worth more than a 500-word description.
-2. Tell us the version (`tythe --version`), Python version, and Node version.
+2. Tell us the version (`dyadpy --version`), Python version, and Node version.
 3. If it's a codegen issue, paste both the Python handler and the generated
    TS output.
 

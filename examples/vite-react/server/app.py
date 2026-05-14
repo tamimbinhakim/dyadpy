@@ -22,8 +22,8 @@ from dataclasses import dataclass
 from typing import Annotated, Literal
 
 import msgspec
-from tythe import App, Context, Depends, raises, stream
-from tythe.params import Header, Query
+from dyadpy import App, Context, Depends, raises, stream
+from dyadpy.params import Header, Query
 
 app = App()
 

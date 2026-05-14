@@ -1,4 +1,4 @@
-"""FastAPI benchmark target. Same wire shape as Tythe / Litestar peers."""
+"""FastAPI benchmark target. Same wire shape as Dyadpy / Litestar peers."""
 
 # pyright: basic
 

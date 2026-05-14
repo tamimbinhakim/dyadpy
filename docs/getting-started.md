@@ -6,7 +6,7 @@ Five minutes from clone to a typed Python ↔ TypeScript call.
 
 | Tool   | Version | Why                                          |
 | ------ | ------- | -------------------------------------------- |
-| Python | ≥ 3.11  | Tythe uses modern type-hint syntax.          |
+| Python | ≥ 3.11  | Dyadpy uses modern type-hint syntax.         |
 | Node   | ≥ 20    | For your frontend toolchain.                 |
 | `uv`   | latest  | Python package manager. `brew install uv`.   |
 | `pnpm` | ≥ 9     | Or `npm` / `yarn`, but pnpm is what I'd use. |
@@ -15,17 +15,17 @@ Five minutes from clone to a typed Python ↔ TypeScript call.
 
 ```bash
 # In your Python project
-uv add tythe
+uv add dyadpy
 
 # In your frontend project
-pnpm add @tythe/ts
+pnpm add @dyadpy/ts
 ```
 
 ## 2. Write a handler
 
 ```python
 # server/app.py
-from tythe import App
+from dyadpy import App
 import msgspec
 
 app = App()
@@ -57,23 +57,23 @@ The handler signature is the API contract. No `class PostRequest(BaseModel)` in 
 ## 3. Run dev
 
 ```bash
-tythe dev server.app:app --out ../frontend/src/lib/tythe/client.ts
+dyadpy dev server.app:app --out ../frontend/src/lib/dyadpy/client.ts
 ```
 
 - Uvicorn starts on `http://127.0.0.1:8000`.
-- Tythe watches `*.py` and rewrites the generated `client.ts` atomically on save.
+- Dyadpy watches `*.py` and rewrites the generated `client.ts` atomically on save.
 
 For a one-shot codegen (no server, no watcher):
 
 ```bash
-tythe codegen server.app:app --out ../frontend/src/lib/tythe/client.ts
+dyadpy codegen server.app:app --out ../frontend/src/lib/dyadpy/client.ts
 ```
 
 ## 4. Call it
 
 ```ts
 // frontend/src/app/page.tsx
-import { api } from "@/lib/tythe/client";
+import { api } from "@/lib/dyadpy/client";
 
 const post = await api.createPost({ data: { title: "first", body: "hello" } });
 //    ^? Post
@@ -89,7 +89,7 @@ Hover `api.createPost` in your editor. Return type: `Post`. Param type: `CreateP
 `stream[T]` return → SSE on the wire → `AsyncIterable<T>` on the client.
 
 ```python
-from tythe import stream
+from dyadpy import stream
 import msgspec, asyncio
 
 class Tick(msgspec.Struct, tag="tick"):
@@ -121,7 +121,7 @@ Cancellation: pass an `AbortSignal`. The server sees the disconnect via `request
 
 ```python
 from dataclasses import dataclass
-from tythe import raises
+from dyadpy import raises
 
 @dataclass
 class PostNotFound(Exception):
@@ -153,7 +153,7 @@ Each has a one-liner here and a full example in [reference](./reference.md).
 ### Raw bodies — `Bytes`
 
 ```python
-from tythe import Bytes
+from dyadpy import Bytes
 
 @app.post("/webhooks/stripe")
 async def stripe(body: Bytes, sig: Annotated[str, Header("stripe-signature")]) -> None:
@@ -169,7 +169,7 @@ TS: `Blob | Uint8Array | ArrayBuffer` in, `Blob` out.
 ### Form bodies
 
 ```python
-from tythe import Form
+from dyadpy import Form
 
 class LoginForm(msgspec.Struct):
     email: str
@@ -184,7 +184,7 @@ Wire: `application/x-www-form-urlencoded` (or multipart with files).
 ### Response control — `Context`
 
 ```python
-from tythe import Context
+from dyadpy import Context
 
 @app.post("/issues")
 async def create(data: CreateIssue, ctx: Context) -> Issue:
@@ -198,7 +198,7 @@ async def create(data: CreateIssue, ctx: Context) -> Issue:
 ### Post-response hooks — `after()`
 
 ```python
-from tythe import after
+from dyadpy import after
 
 @app.post("/posts")
 async def create_post(data: CreatePost) -> Post:
@@ -226,7 +226,7 @@ Prefetch on the server, hydrate on the client — first paint with no waterfall.
 
 ```tsx
 // Next.js App Router server component
-import { prefetchQuery } from "@tythe/react/server";
+import { prefetchQuery } from "@dyadpy/react/server";
 
 const qc = new QueryClient();
 await prefetchQuery(qc, api, "getUser", { userId: 1 });
@@ -246,10 +246,10 @@ Full SSR guide: [`docs/ssr.md`](./ssr.md).
 ## Troubleshooting
 
 **The watcher says "no `App` found".**
-`tythe dev` takes `module:attr`, not a path. Make sure `server/app.py` defines `app = App()` and the working directory is the Python project root.
+`dyadpy dev` takes `module:attr`, not a path. Make sure `server/app.py` defines `app = App()` and the working directory is the Python project root.
 
 **My TS types are `any`.**
-You're missing `@tythe/ts`, or your editor hasn't picked up the generated `client.ts`. Restart the TypeScript server.
+You're missing `@dyadpy/ts`, or your editor hasn't picked up the generated `client.ts`. Restart the TypeScript server.
 
 **Streaming doesn't cancel server-side.**
 Your handler needs to periodically `await` (or check `request.is_disconnected()`). A tight CPU loop will keep running until the next await.

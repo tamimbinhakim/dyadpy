@@ -4,7 +4,7 @@ This is what's shipping when. Priorities shift, the world is
 unpredictable. But it's the most honest plan I have.
 
 If you want to influence it, the highest-leverage move is to open an
-issue saying "I tried to use Tythe for X and it didn't work because Y."
+issue saying "I tried to use Dyadpy for X and it didn't work because Y."
 That's worth more than ten feature requests.
 
 ## v0.1 — Shipped
@@ -30,7 +30,7 @@ either rides on top or doesn't belong inside.
       response control.
 - [x] Free `after(fn, *a, **kw)` post-response hook via contextvar.
 - [x] `Depends(...)` DI compatible with the FastAPI shape.
-- [x] `Pydantic` plugin (`tythe[pydantic]`) — runtime + IR auto-route
+- [x] `Pydantic` plugin (`dyadpy[pydantic]`) — runtime + IR auto-route
       Pydantic models through `model_validate` / `model_json_schema`.
 
 **Codegen + tooling**
@@ -38,26 +38,26 @@ either rides on top or doesn't belong inside.
 - [x] Type extraction → JSON-Schema-2020-12 IR via msgspec.
 - [x] TypeScript codegen: single file, Proxy-based client, types,
       fetch wrapper, AbortSignal, snake_case ↔ camelCase translation.
-- [x] `tythe dev` / `build` / `codegen` / `init` CLI.
-- [x] `tythe openapi` — OpenAPI 3.1 export off the same IR.
-- [x] `tythe swift` / `tythe kotlin` — working HTTP clients (typed
+- [x] `dyadpy dev` / `build` / `codegen` / `init` CLI.
+- [x] `dyadpy openapi` — OpenAPI 3.1 export off the same IR.
+- [x] `dyadpy swift` / `dyadpy kotlin` — working HTTP clients (typed
       args + responses, typed `@raises` enums, snake_case mapping).
-- [x] `tythe deploy fly|render|modal` — thin wrapper around provider
+- [x] `dyadpy deploy fly|render|modal` — thin wrapper around provider
       CLIs.
 
 **Framework bindings (separate packages)**
 
-- [x] `@tythe/ts` — the framework-agnostic runtime the codegen
+- [x] `@dyadpy/ts` — the framework-agnostic runtime the codegen
       imports (zero deps, ~3 KB min+gz).
-- [x] `@tythe/react` — `useQuery` / `useMutation` / `useSubscription`
+- [x] `@dyadpy/react` — `useQuery` / `useMutation` / `useSubscription`
       on TanStack Query.
-- [x] `@tythe/svelte` — Svelte 5 store bindings.
-- [x] `@tythe/solid` — SolidJS resource / signal bindings.
+- [x] `@dyadpy/svelte` — Svelte 5 store bindings.
+- [x] `@dyadpy/solid` — SolidJS resource / signal bindings.
 
 **Observability + tasks**
 
-- [x] `tythe.otel.instrument(app)` — opt-in OpenTelemetry middleware.
-- [x] `tythe.tasks.InMemoryBackend` + `TaskBackend` Protocol for
+- [x] `dyadpy.otel.instrument(app)` — opt-in OpenTelemetry middleware.
+- [x] `dyadpy.tasks.InMemoryBackend` + `TaskBackend` Protocol for
       background jobs. Redis / SQS adapters intentionally separate.
 
 **Examples**
@@ -65,7 +65,7 @@ either rides on top or doesn't belong inside.
 - [x] `examples/nextjs-streaming` — typed SSE end-to-end in <50 lines.
 - [x] `examples/vite-react` — issue tracker exercising the full
       type-safety surface, plus a side-by-side **vs FastAPI** page.
-- [x] `examples/sveltekit-counter` — `@tythe/svelte` end-to-end.
+- [x] `examples/sveltekit-counter` — `@dyadpy/svelte` end-to-end.
 
 ## v0.2 — Hardening + stable surface
 
@@ -74,7 +74,7 @@ is mostly there; v0.2 is about removing rough edges.
 
 - [x] **Better validation errors.** Field-level paths + offending
       value in the 422 body, both for msgspec and Pydantic.
-- [x] **Generated-client diff in CI.** `tythe diff <old> <new>` flags
+- [x] **Generated-client diff in CI.** `dyadpy diff <old> <new>` flags
       removed routes / renamed fields / narrowed types as breaking.
 - [x] **`Task[T]` wired into the runtime.** `mount_task_routes(app, path,
 handler, backend=...)` registers `POST <path>` (submit) +
@@ -92,12 +92,12 @@ handler, backend=...)` registers `POST <path>` (submit) +
       lands in a v0.2.x point release.
 - [x] **Pydantic deep parity.** `model_config` round-tripping,
       discriminated unions, computed fields.
-- [x] **Coverage ≥ 85% across `tythe/*` source** (CI-enforced; the >90%
+- [x] **Coverage ≥ 85% across `dyadpy/*` source** (CI-enforced; the >90%
       goal is tracked as a continuous polish item, not a 0.2 blocker).
-- [x] **3rd-party benchmark pass.** Identical handlers across Tythe /
+- [x] **3rd-party benchmark pass.** Identical handlers across Dyadpy /
       FastAPI / Litestar in [`benchmarks/`](benchmarks/), driven by a
       reproducible harness that prints cold-start + p50 / p95 / p99
-      latency + req/s per scenario. Tythe wins cold start by ~2× on the
+      latency + req/s per scenario. Dyadpy wins cold start by ~2× on the
       reference machine; steady-state throughput sits within ~25% of
       both peers at concurrency 64.
 
@@ -106,9 +106,9 @@ handler, backend=...)` registers `POST <path>` (submit) +
 Real, but unsized. Each lands when it earns its keep:
 
 - [ ] Backpressure / flow-control hooks for streams.
-- [ ] OpenAPI **import** — generate Tythe handler stubs from an
+- [ ] OpenAPI **import** — generate Dyadpy handler stubs from an
       existing OpenAPI doc. Migration path for FastAPI codebases.
-- [ ] `tythe.observability` extra — Prometheus metrics + structured
+- [ ] `dyadpy.observability` extra — Prometheus metrics + structured
       logging recipe (on top of the existing OTel middleware).
 - [ ] Range requests / 206 Partial Content for `Bytes` responses.
 - [ ] `Subscription[T]` — `useSubscription` with typed acks (separate
@@ -148,22 +148,22 @@ Below the feature work, the steady stuff:
 
 ## Meta-frameworks territory — deliberately outside core
 
-These are real, useful patterns. They don't belong inside `tythe`
+These are real, useful patterns. They don't belong inside `dyadpy`
 because they carry opinion about how an app is structured. They belong
 in a meta-framework that sits on top of the IR and the runtime —
-possibly one we ship separately (working title: `tythe-kit`).
+possibly one we ship separately (working title: `dyadpy-kit`).
 
 - **File-based routing.** Scan a `routes/` tree, register handlers by
   filename, hot-reload on change. Pure convenience layer over `App`.
-- **Monorepo scaffolds.** `npx create-tythe-app` with a baked-in
+- **Monorepo scaffolds.** `npx create-dyadpy-app` with a baked-in
   Next.js / Vite / SvelteKit frontend wired to a Python server.
-- **Auth presets.** A `tythe-auth-clerk` / `tythe-auth-nextauth` that
+- **Auth presets.** A `dyadpy-auth-clerk` / `dyadpy-auth-nextauth` that
   wires `Depends(current_user)` for you.
 - **AI / LLM templates.** Token-streaming routes, tool-call shapes,
   rate-limited inference endpoints — opinion-heavy, separate package.
 - **Admin UIs / dashboards** generated from the IR.
 
-The IR (`tythe.ir`) and the CLI codegen entry points are deliberately
+The IR (`dyadpy.ir`) and the CLI codegen entry points are deliberately
 designed to make these buildable from outside. If you'd like to ship
 one, open an issue — happy to help shape the seams.
 
@@ -172,17 +172,17 @@ one, open an issue — happy to help shape the seams.
 Some lines I'm holding for now. If enough people push back I'll
 reconsider — but the default is no.
 
-- **A `tythe.ai` module / LLM-specific types.** Tythe ships at the
+- **A `dyadpy.ai` module / LLM-specific types.** Dyadpy ships at the
   fundamental level: RPC, streaming, errors, cancellation. LLM tokens,
   tool calls, agent state, structured outputs — those are user code or
-  a separate plugin (`tythe-llm`, community-maintained).
+  a separate plugin (`dyadpy-llm`, community-maintained).
 - **WebSockets as the default streaming transport.** SSE is enough,
   simpler, and matches what every major server-push protocol
   standardized on. WS is opt-in via `bidi[S, R]`.
 - **A monorepo template that bundles Next.js.** Bring your own
-  frontend. Tythe writes a file into your `src/`. That's it.
+  frontend. Dyadpy writes a file into your `src/`. That's it.
 - **GraphQL support.** Different mental model. Scope balloon.
-- **A managed hosted service.** Tythe is a library. Modal / Fly /
+- **A managed hosted service.** Dyadpy is a library. Modal / Fly /
   Render handle hosting just fine.
 
 ## Influences

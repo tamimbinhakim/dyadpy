@@ -16,7 +16,7 @@ uv.lock
 
 # Generated
 **/*.generated.ts
-**/lib/tythe/client.ts
+**/lib/dyadpy/client.ts
 
 # Handled by Prettier
 **/*.md

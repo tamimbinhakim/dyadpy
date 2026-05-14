@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { api, type BuildArtifact, type BuildLog, type Deployed } from "@/lib/tythe/client";
+import { api } from "@/lib/dyadpy/client";
+import type { BuildArtifact, BuildLog, Deployed } from "@/lib/dyadpy/client";
 
 type State = {
   phase: "provision" | "build" | "deploy" | "done" | "failed";
@@ -39,30 +40,37 @@ export default function Page() {
         for await (const ev of api.watchDeployment({ jobId }, { signal: ac.signal })) {
           setState((s) => {
             switch (ev.kind) {
-              case "provisioning":
+              case "provisioning": {
                 return { ...s, phase: ev.phase };
-              case "build_log":
+              }
+              case "build_log": {
                 return { ...s, logs: [...s.logs, ev] };
-              case "build_artifact":
+              }
+              case "build_artifact": {
                 return { ...s, artifact: ev };
-              case "deploying":
+              }
+              case "deploying": {
                 return { ...s, phase: "deploy" };
-              case "deployed":
+              }
+              case "deployed": {
                 return { ...s, phase: "done", deployed: ev };
-              case "failed_build":
+              }
+              case "failed_build": {
                 return {
                   ...s,
                   phase: "failed",
                   failure: `${ev.failingStep} exited ${ev.exitCode}\n${ev.tail.join("\n")}`,
                 };
-              case "failed_deploy":
+              }
+              case "failed_deploy": {
                 return { ...s, phase: "failed", failure: `${ev.target}: ${ev.reason}` };
+              }
             }
           });
         }
-      } catch (err) {
-        if ((err as Error).name === "AbortError") return;
-        setState((s) => ({ ...s, phase: "failed", failure: (err as Error).message }));
+      } catch (error) {
+        if ((error as Error).name === "AbortError") return;
+        setState((s) => ({ ...s, phase: "failed", failure: (error as Error).message }));
       }
     })();
 

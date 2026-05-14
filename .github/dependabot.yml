@@ -19,11 +19,11 @@ updates:
         patterns: ["*"]
 
   - package-ecosystem: "npm"
-    directory: "/packages/tythe-ts"
+    directory: "/packages/dyadpy-ts"
     schedule: { interval: "weekly" }
 
   - package-ecosystem: "pip"
-    directory: "/packages/tythe"
+    directory: "/packages/dyadpy"
     schedule: { interval: "weekly" }
     open-pull-requests-limit: 10
     groups:

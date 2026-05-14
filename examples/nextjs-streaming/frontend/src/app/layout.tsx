@@ -1,5 +1,5 @@
 export const metadata = {
-  title: "Tythe · streaming demo",
+  title: "Dyadpy · streaming demo",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

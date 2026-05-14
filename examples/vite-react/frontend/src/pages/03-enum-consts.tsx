@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { api, IssuePriority, IssueStatus } from "../lib/tythe/client";
+import { api, IssuePriority, IssueStatus } from "../lib/dyadpy/client";
 
 const AUTH = { authorization: "Bearer 1" };
 

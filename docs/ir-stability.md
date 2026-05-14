@@ -1,8 +1,8 @@
 # IR stability policy
 
-Tythe's intermediate representation (`tythe.ir.AppIR`) is the contract
+Dyadpy's intermediate representation (`dyadpy.ir.AppIR`) is the contract
 between server and client. Anything that reads the IR — the TS codegen,
-the OpenAPI exporter, the polyglot Swift / Kotlin renderers, `tythe diff`,
+the OpenAPI exporter, the polyglot Swift / Kotlin renderers, `dyadpy diff`,
 and any third-party tool — relies on its shape.
 
 **As of v1.0**, the IR's shape is committed. This document spells out
@@ -12,8 +12,8 @@ what that commitment means.
 
 - **`AppIR`, `RouteIR`, `ParamIR`, `ErrorIR`** dataclass fields (names,
   meanings, types).
-- **The JSON snapshot format** emitted by `tythe ir <module:attr>`.
-- **The wire format** between Tythe servers and clients: JSON envelope,
+- **The JSON snapshot format** emitted by `dyadpy ir <module:attr>`.
+- **The wire format** between Dyadpy servers and clients: JSON envelope,
   SSE frame shape, snake_case ↔ camelCase translation rule.
 
 ## Compatibility rules
@@ -66,12 +66,12 @@ Example: removing a hypothetical `RouteIR.legacy_flag` field.
 - v1.6: still works, still warns.
 - v2.0: removed.
 
-`tythe diff` flags additions / removals at the IR level so accidental
+`dyadpy diff` flags additions / removals at the IR level so accidental
 breakages can't slip through.
 
 ## Compatibility tests
 
 The CI suite includes IR snapshot tests: for each minor release we
-freeze a representative `tythe-ir.json` and assert future versions can
+freeze a representative `dyadpy-ir.json` and assert future versions can
 either consume it directly or produce a backward-compatible diff. The
-files live in `packages/tythe/tests/golden/` (added in v0.2).
+files live in `packages/dyadpy/tests/golden/` (added in v0.2).

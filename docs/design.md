@@ -1,6 +1,6 @@
 # Design
 
-The choices Tythe makes, what they buy you, and what they cost.
+The choices Dyadpy makes, what they buy you, and what they cost.
 
 ## The contract: your function signature
 
@@ -15,7 +15,7 @@ What this gets you:
 
 - One source of truth. No `class CreatePostRequest(BaseModel)` floating in `schemas/`.
 - The type-checker is the linter. Adding a field on the Python side fails the TS build until the client uses it.
-- No tools to learn beyond `tythe dev`. Editors do the rest.
+- No tools to learn beyond `dyadpy dev`. Editors do the rest.
 
 What it costs you:
 
@@ -23,7 +23,7 @@ What it costs you:
 
 ## Codegen exists, but you never see it
 
-One command — `tythe dev` — runs your ASGI app, watches files, and writes one `client.ts` into your frontend. No `package.json` script. No pre-commit hook. No "did CI run codegen?". The watcher owns it.
+One command — `dyadpy dev` — runs your ASGI app, watches files, and writes one `client.ts` into your frontend. No `package.json` script. No pre-commit hook. No "did CI run codegen?". The watcher owns it.
 
 The generated file is one file, not a `client/` directory with twelve `*.types.ts`. You can grep it, diff it, snapshot it, commit it (or `.gitignore` it — your call).
 
@@ -46,7 +46,7 @@ What this gets you:
 
 What it costs you:
 
-- msgspec is less famous than Pydantic. If your team only knows Pydantic, install `tythe[pydantic]` and use `BaseModel` everywhere — it's a first-class plugin, not a shim.
+- msgspec is less famous than Pydantic. If your team only knows Pydantic, install `dyadpy[pydantic]` and use `BaseModel` everywhere — it's a first-class plugin, not a shim.
 
 ## Errors are values
 
@@ -76,7 +76,7 @@ What this gets you:
 
 A minor version bump that changes the shape of `client.ts` in a way that breaks a working caller is a breaking change. The output rules — multi-line wrapping past N fields, JSDoc from docstrings, trailing commas — are part of the contract.
 
-What this gets you: your client doesn't break when you `pnpm up @tythe/ts` to a new patch version.
+What this gets you: your client doesn't break when you `pnpm up @dyadpy/ts` to a new patch version.
 
 ## What's not in the box
 
@@ -84,17 +84,17 @@ What this gets you: your client doesn't break when you `pnpm up @tythe/ts` to a 
 - **No rate limiting / caching headers / ETag.** Middleware territory. `ctx.set_header` covers the basics.
 - **No LLM-shaped types.** LLM tokens are typed SSE events — use `stream[T]`. Bring your own OpenAI/Anthropic SDK.
 - **No GraphQL.** Different mental model. Strawberry exists.
-- **No bundled frontend template.** Tythe writes a file into your `src/`. Pick your own framework.
+- **No bundled frontend template.** Dyadpy writes a file into your `src/`. Pick your own framework.
 - **No managed hosting.** It's a library. Modal / Fly / Render handle hosting fine.
 
 ## How it compares
 
-|                        | **Tythe**                               | FastAPI + openapi-typescript | tRPC          | Encore.ts          | Connect-RPC              | Reflex              |
+|                        | **Dyadpy**                              | FastAPI + openapi-typescript | tRPC          | Encore.ts          | Connect-RPC              | Reflex              |
 | ---------------------- | --------------------------------------- | ---------------------------- | ------------- | ------------------ | ------------------------ | ------------------- |
 | Backend lang           | **Python**                              | Python                       | TypeScript    | TS / Go            | Polyglot                 | Python              |
 | Frontend lang          | **Any TS**                              | TS                           | TS only       | TS only            | Polyglot                 | None — JS hidden    |
 | DTO duplication        | **None**                                | Yes                          | None          | None               | Yes (`.proto`)           | N/A                 |
-| Codegen visible to dev | **`tythe dev` only**                    | Yes, explicit                | None          | Implicit (build)   | Yes, `buf gen`           | None                |
+| Codegen visible to dev | **`dyadpy dev` only**                   | Yes, explicit                | None          | Implicit (build)   | Yes, `buf gen`           | None                |
 | Streaming type-safe    | **Yes (typed SSE union)**               | Painful / manual             | Subscriptions | Yes                | Yes                      | N/A                 |
 | Typed errors → TS      | **Discriminated union**                 | HTTP codes                   | `TRPCError`   | Yes                | Yes (`isAPIError`)       | N/A                 |
 | Validation runtime     | msgspec (Pydantic opt-in)               | Pydantic v2                  | Zod           | Rust + JSON Schema | Protovalidate            | Pydantic            |
@@ -102,15 +102,15 @@ What this gets you: your client doesn't break when you `pnpm up @tythe/ts` to a 
 
 ## Polyglot clients
 
-The IR is JSON Schema 2020-12 plus a thin Tythe layer for streams/errors/tasks. The TypeScript renderer is one consumer; Swift and Kotlin ship in core (`tythe swift`, `tythe kotlin`). Anything that reads JSON Schema can read Tythe's IR.
+The IR is JSON Schema 2020-12 plus a thin Dyadpy layer for streams/errors/tasks. The TypeScript renderer is one consumer; Swift and Kotlin ship in core (`dyadpy swift`, `dyadpy kotlin`). Anything that reads JSON Schema can read Dyadpy's IR.
 
 What this gets you: if you ship a mobile app later, the same Python handler also generates a Swift or Kotlin client off the same source of truth.
 
 ## Why this matters for your repo
 
-If your stack is Python + modern TS, Tythe removes the codegen ceremony you don't want to deal with — but it doesn't replace your Python framework, your auth, your ORM, or your frontend framework. It's the wire between two halves of your app, with the types intact.
+If your stack is Python + modern TS, Dyadpy removes the codegen ceremony you don't want to deal with — but it doesn't replace your Python framework, your auth, your ORM, or your frontend framework. It's the typed contract between the two halves of your app — Python on one side, TypeScript on the other, both fully checked.
 
-If your stack is something else, Tythe probably isn't the right tool. tRPC is great for TS monorepos. Connect-RPC is great for polyglot microservices. Reflex is great for internal dashboards. Pick the right tool for the actual constraint.
+If your stack is something else, Dyadpy probably isn't the right tool. tRPC is great for TS monorepos. Connect-RPC is great for polyglot microservices. Reflex is great for internal dashboards. Pick the right tool for the actual constraint.
 
 ## Stability commitments
 
@@ -123,10 +123,10 @@ The four pillars of the v1.0 freeze are written down, not just promised:
 
 ## Want to read the code?
 
-- [`packages/tythe/src/tythe/app.py`](../packages/tythe/src/tythe/app.py)
-- [`packages/tythe/src/tythe/ir.py`](../packages/tythe/src/tythe/ir.py)
-- [`packages/tythe/src/tythe/codegen.py`](../packages/tythe/src/tythe/codegen.py)
-- [`packages/tythe/src/tythe/streaming.py`](../packages/tythe/src/tythe/streaming.py)
-- [`packages/tythe-ts/src/`](../packages/tythe-ts/src)
+- [`packages/dyadpy/src/dyadpy/app.py`](../packages/dyadpy/src/dyadpy/app.py)
+- [`packages/dyadpy/src/dyadpy/ir.py`](../packages/dyadpy/src/dyadpy/ir.py)
+- [`packages/dyadpy/src/dyadpy/codegen.py`](../packages/dyadpy/src/dyadpy/codegen.py)
+- [`packages/dyadpy/src/dyadpy/streaming.py`](../packages/dyadpy/src/dyadpy/streaming.py)
+- [`packages/dyadpy-ts/src/`](../packages/dyadpy-ts/src)
 
 Full walk-through in [`docs/architecture.md`](./architecture.md).

@@ -38,9 +38,9 @@ importers:
 
   examples/nextjs-streaming/frontend:
     dependencies:
-      '@tythe/ts':
+      '@dyadpy/ts':
         specifier: workspace:*
-        version: link:../../../packages/tythe-ts
+        version: link:../../../packages/dyadpy-ts
       next:
         specifier: ^15.1.0
         version: 15.5.18(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
@@ -66,12 +66,12 @@ importers:
 
   examples/sveltekit-counter/frontend:
     dependencies:
-      '@tythe/svelte':
+      '@dyadpy/svelte':
         specifier: workspace:*
-        version: link:../../../packages/tythe-svelte
-      '@tythe/ts':
+        version: link:../../../packages/dyadpy-svelte
+      '@dyadpy/ts':
         specifier: workspace:*
-        version: link:../../../packages/tythe-ts
+        version: link:../../../packages/dyadpy-ts
     devDependencies:
       '@sveltejs/adapter-auto':
         specifier: ^7.0.1
@@ -100,9 +100,9 @@ importers:
 
   examples/vite-react/frontend:
     dependencies:
-      '@tythe/ts':
+      '@dyadpy/ts':
         specifier: workspace:*
-        version: link:../../../packages/tythe-ts
+        version: link:../../../packages/dyadpy-ts
       react:
         specifier: ^19.2.6
         version: 19.2.6
@@ -126,7 +126,7 @@ importers:
         specifier: ^8.0.12
         version: 8.0.12(@types/node@25.7.0)(esbuild@0.27.7)(jiti@2.6.1)(yaml@2.8.4)
 
-  packages/tythe-react:
+  packages/dyadpy-react:
     devDependencies:
       '@tanstack/react-query':
         specifier: 5.100.10
@@ -143,9 +143,9 @@ importers:
       '@types/react-dom':
         specifier: 19.2.3
         version: 19.2.3(@types/react@19.2.14)
-      '@tythe/ts':
+      '@dyadpy/ts':
         specifier: workspace:*
-        version: link:../tythe-ts
+        version: link:../dyadpy-ts
       happy-dom:
         specifier: 20.9.0
         version: 20.9.0
@@ -165,14 +165,14 @@ importers:
         specifier: 4.1.6
         version: 4.1.6(@types/node@25.7.0)(happy-dom@20.9.0)(vite@8.0.12(@types/node@25.7.0)(esbuild@0.27.7)(jiti@2.6.1)(yaml@2.8.4))
 
-  packages/tythe-solid:
+  packages/dyadpy-solid:
     devDependencies:
       '@types/node':
         specifier: 25.7.0
         version: 25.7.0
-      '@tythe/ts':
+      '@dyadpy/ts':
         specifier: workspace:*
-        version: link:../tythe-ts
+        version: link:../dyadpy-ts
       happy-dom:
         specifier: 20.9.0
         version: 20.9.0
@@ -192,14 +192,14 @@ importers:
         specifier: 4.1.6
         version: 4.1.6(@types/node@25.7.0)(happy-dom@20.9.0)(vite@8.0.12(@types/node@25.7.0)(esbuild@0.27.7)(jiti@2.6.1)(yaml@2.8.4))
 
-  packages/tythe-svelte:
+  packages/dyadpy-svelte:
     devDependencies:
       '@types/node':
         specifier: 25.7.0
         version: 25.7.0
-      '@tythe/ts':
+      '@dyadpy/ts':
         specifier: workspace:*
-        version: link:../tythe-ts
+        version: link:../dyadpy-ts
       svelte:
         specifier: 5.55.5
         version: 5.55.5
@@ -213,7 +213,7 @@ importers:
         specifier: 4.1.6
         version: 4.1.6(@types/node@25.7.0)(happy-dom@20.9.0)(vite@8.0.12(@types/node@25.7.0)(esbuild@0.27.7)(jiti@2.6.1)(yaml@2.8.4))
 
-  packages/tythe-ts:
+  packages/dyadpy-ts:
     devDependencies:
       '@types/node':
         specifier: 25.7.0

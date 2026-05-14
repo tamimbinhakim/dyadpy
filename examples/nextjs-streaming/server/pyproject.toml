@@ -2,7 +2,7 @@
 name = "nextjs-streaming-example"
 version = "0"
 requires-python = ">=3.11"
-dependencies = ["tythe"]
+dependencies = ["dyadpy"]
 
 [tool.uv.sources]
-tythe = { path = "../../../packages/tythe", editable = true }
+dyadpy = { path = "../../../packages/dyadpy", editable = true }

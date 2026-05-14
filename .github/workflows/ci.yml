@@ -50,7 +50,7 @@ jobs:
       - run: pnpm lint:ts
       - run: pnpm format:check:ts
       - run: pnpm format:check:docs
-      # Typecheck imports `@tythe/ts`; build it (and the rest) first so
+      # Typecheck imports `@dyadpy/ts`; build it (and the rest) first so
       # the workspace symlink resolves to dist/.
       - run: pnpm -r --filter=./packages/* run build
       - run: pnpm typecheck
@@ -72,7 +72,7 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # Build first: framework bindings import from "@tythe/ts" → ./dist,
+      # Build first: framework bindings import from "@dyadpy/ts" → ./dist,
       # so the runtime package has to be compiled before its consumers
       # run their vitest suite.
       - run: pnpm -r --filter=./packages/* run build
@@ -91,7 +91,7 @@ jobs:
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.0.0
         with:
           python-version: "3.13"
-      - working-directory: packages/tythe
+      - working-directory: packages/dyadpy
         run: |
           uv sync --all-extras --dev
           uv run ruff check .
@@ -116,17 +116,17 @@ jobs:
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.0.0
         with:
           python-version: ${{ matrix.python }}
-      - working-directory: packages/tythe
+      - working-directory: packages/dyadpy
         run: |
           uv sync --all-extras --dev
           # Coverage floor is set one notch below the current measurement
           # (86%) so a small CI variance can't fail the build; raise it as
           # the suite gains real coverage rather than coverage-padding tests.
-          uv run pytest --cov=tythe --cov-report=xml --cov-fail-under=85 -q
+          uv run pytest --cov=dyadpy --cov-report=xml --cov-fail-under=85 -q
       - if: matrix.os == 'ubuntu-latest' && matrix.python == '3.13'
         uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238 # v4.6.0
         with:
-          files: packages/tythe/coverage.xml
+          files: packages/dyadpy/coverage.xml
           flags: python
           token: ${{ secrets.CODECOV_TOKEN }}
 

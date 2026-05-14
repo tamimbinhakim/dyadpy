@@ -1,6 +1,7 @@
 import { useState } from "react";
-import type { Err, Ok } from "@tythe/ts";
-import { api, type Routes } from "../lib/tythe/client";
+import type { Err, Ok } from "@dyadpy/ts";
+import { api } from "../lib/dyadpy/client";
+import type { Routes } from "../lib/dyadpy/client";
 
 const AUTH = { authorization: "Bearer 1" };
 
@@ -11,12 +12,15 @@ const AUTH = { authorization: "Bearer 1" };
 // 1. Function signature pinned to a route's error union:
 function showError(err: Routes.transitionIssue.Error): string {
   switch (err.kind) {
-    case "IssueNotFound":
+    case "IssueNotFound": {
       return `(${err.kind}) id=${err.issueId}`;
-    case "InvalidStatusTransition":
+    }
+    case "InvalidStatusTransition": {
       return `(${err.kind}) ${err.fromStatus} → ${err.toStatus}`;
-    case "Forbidden":
+    }
+    case "Forbidden": {
       return `(${err.kind}) ${err.reason}`;
+    }
   }
 }
 

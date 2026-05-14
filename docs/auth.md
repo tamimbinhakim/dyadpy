@@ -1,9 +1,9 @@
 # Auth recipes
 
-Tythe doesn't ship auth itself — that's intentional. Auth is a deployment
+Dyadpy doesn't ship auth itself — that's intentional. Auth is a deployment
 decision (NextAuth vs Clerk vs Auth0 vs custom JWT vs session cookies),
 and the right answer depends on where your frontend lives and what your
-team already runs. What Tythe ships is the primitive that makes auth
+team already runs. What Dyadpy ships is the primitive that makes auth
 trivial to wire: **a `Depends(...)` resolver that takes a `Request` (or
 header / cookie) and returns whoever you want on `ctx.user`**.
 
@@ -17,8 +17,8 @@ import jwt
 from dataclasses import dataclass
 from typing import Annotated
 
-from tythe import App, Depends
-from tythe.params import Header
+from dyadpy import App, Depends
+from dyadpy.params import Header
 
 app = App()
 
@@ -66,14 +66,14 @@ def current_user(session: Annotated[str, Cookie()] = "") -> User:
 
 ## 3. NextAuth via JWT
 
-NextAuth signs its session into a cookie; Tythe reads it the same way
+NextAuth signs its session into a cookie; Dyadpy reads it the same way
 you'd read any cookie. The token format is documented at
 [NextAuth's JWT docs](https://next-auth.js.org/configuration/options#jwt).
 
 ```python
 from typing import Annotated
 
-from tythe.params import Cookie
+from dyadpy.params import Cookie
 
 def current_user(
     next_auth_session_token: Annotated[str, Cookie("__Secure-next-auth.session-token")] = "",
@@ -95,13 +95,13 @@ def optional_user(authorization: Annotated[str, Header()] = "") -> User | None:
     return _decode(authorization.removeprefix("Bearer "))
 ```
 
-## What Tythe doesn't do
+## What Dyadpy doesn't do
 
 - **Issue tokens.** That's your auth provider's job (Clerk, Auth0, your
   custom issuer).
 - **Rotate keys / hit JWKS.** Use your auth provider's SDK or `pyjwt[jwks]`.
 - **Manage sessions.** Use Lucia, Django, Iron Session, etc.
 
-Tythe's contribution is making the resolver type-safe and reusable across
+Dyadpy's contribution is making the resolver type-safe and reusable across
 every handler. Once `current_user` works, `Depends(current_user)` plugs
 into any route in two characters.

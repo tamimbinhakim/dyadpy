@@ -1,22 +1,22 @@
 # Server-side rendering
 
-Tythe's runtime (`@tythe/ts`) and every framework adapter
-(`@tythe/react`, `@tythe/svelte`, `@tythe/solid`) is SSR-safe by
+Dyadpy's runtime (`@dyadpy/ts`) and every framework adapter
+(`@dyadpy/react`, `@dyadpy/svelte`, `@dyadpy/solid`) is SSR-safe by
 construction — the generated `client.ts` uses `globalThis.fetch`, never
 touches `window`/`document`/`localStorage`, and accepts a custom
 `fetch` / `headers` / `baseUrl` for environments that need it.
 
 What you usually want on top of that "doesn't crash under SSR" baseline
 is a way to **prefetch on the server, hydrate on the client** — so the
-first paint isn't a spinner. Tythe ships three small helpers for that,
+first paint isn't a spinner. Dyadpy ships three small helpers for that,
 one per framework, all sharing the same shape.
 
 ## The shape
 
-- **`forwardHeaders(req)`** (from `@tythe/ts`) — pulls cookies, auth,
+- **`forwardHeaders(req)`** (from `@dyadpy/ts`) — pulls cookies, auth,
   CSRF, and tracing headers off the incoming request so your SSR call
   reaches the Python handler authenticated as the user.
-- **Framework helper** — bridges the generic Tythe call into the
+- **Framework helper** — bridges the generic Dyadpy call into the
   framework's prefetch / load primitive (React Query's `prefetchQuery`,
   SvelteKit's `+page.server.ts` load, SolidStart's request event).
 
@@ -29,12 +29,12 @@ import {
   HydrationBoundary,
   QueryClient,
 } from "@tanstack/react-query";
-import { prefetchQuery } from "@tythe/react/server";
-import { forwardHeaders } from "@tythe/ts";
+import { prefetchQuery } from "@dyadpy/react/server";
+import { forwardHeaders } from "@dyadpy/ts";
 import { headers } from "next/headers";
 
-import { api } from "@/lib/tythe/client";
-import { UserCard } from "./UserCard"; // client component using `useTythe.useQuery`
+import { api } from "@/lib/dyadpy/client";
+import { UserCard } from "./UserCard"; // client component using `useDyadpy.useQuery`
 
 export default async function Page({
   params,
@@ -58,7 +58,7 @@ export default async function Page({
 }
 ```
 
-The client component uses `useTythe.useQuery("getUser", { userId: 1 })`
+The client component uses `useDyadpy.useQuery("getUser", { userId: 1 })`
 with the same query key — React Query finds the dehydrated entry and
 renders instantly without a refetch.
 
@@ -76,8 +76,8 @@ await prefetchQueries(qc, api, [
 
 ```ts
 // src/routes/me/+page.server.ts
-import { loadQuery } from "@tythe/svelte/server";
-import { api } from "$lib/tythe/client";
+import { loadQuery } from "@dyadpy/svelte/server";
+import { api } from "$lib/dyadpy/client";
 
 export const load = async (event) => ({
   me: await loadQuery(api, "me", undefined, event),
@@ -103,9 +103,9 @@ the result into the rendered HTML — no client refetch.
 // src/routes/me.tsx
 import { createAsync } from "@solidjs/router";
 import { getRequestEvent } from "solid-js/web";
-import { serverQuery } from "@tythe/solid/server";
+import { serverQuery } from "@dyadpy/solid/server";
 
-import { api } from "~/lib/tythe/client";
+import { api } from "~/lib/dyadpy/client";
 
 const fetchMe = async () => {
   "use server";
@@ -125,10 +125,10 @@ export default function Me() {
 These claims are pinned by tests (`tests/csr-safety.test.ts` in each
 framework package):
 
-- Importing any `@tythe/*` module under a Node environment with no
+- Importing any `@dyadpy/*` module under a Node environment with no
   `window` / `document` / `localStorage` does not throw.
-- The server entry points (`@tythe/react/server`, `@tythe/svelte/server`,
-  `@tythe/solid/server`) do not transitively reach for DOM globals at
+- The server entry points (`@dyadpy/react/server`, `@dyadpy/svelte/server`,
+  `@dyadpy/solid/server`) do not transitively reach for DOM globals at
   import or at call time.
 - `forwardHeaders` accepts both a bare `Headers` and any
   `{ headers: Headers }` shape, so it composes with Next.js
@@ -137,7 +137,7 @@ framework package):
 
 ## What we don't do
 
-- **No magic `useTythe.useSuspenseQuery`.** If you want suspense, use
+- **No magic `useDyadpy.useSuspenseQuery`.** If you want suspense, use
   `useQuery({ suspense: true })` (TanStack) or `createAsync` (Solid)
   on top of the existing hook — the SSR prefetch already populates the
   cache so suspense resolves synchronously.

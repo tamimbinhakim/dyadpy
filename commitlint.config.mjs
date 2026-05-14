@@ -8,7 +8,7 @@ export default {
       1,
       "always",
       [
-        "tythe",
+        "dyadpy",
         "client",
         "codegen",
         "ir",

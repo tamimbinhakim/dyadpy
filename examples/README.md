@@ -7,7 +7,7 @@ run, poke around.
 | ------------------------------------------ | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [`nextjs-streaming`](./nextjs-streaming)   | Next.js 15 (App Router) + Python `App` | Typed SSE streaming — progress, logs, and a final result — with discriminated-union narrowing and cancellation. The hero demo.                       |
 | [`vite-react`](./vite-react)               | Vite + React + Python `App`            | Issue tracker. Typed errors, exhaustive switches, enum value-objects, the `Routes.X.*` namespace, and a side-by-side **vs FastAPI** comparison page. |
-| [`sveltekit-counter`](./sveltekit-counter) | SvelteKit 2 + Svelte 5 + Python `App`  | Counter with typed `@raises` errors and a live subscription store backed by SSE. Demos `@tythe/svelte`.                                              |
+| [`sveltekit-counter`](./sveltekit-counter) | SvelteKit 2 + Svelte 5 + Python `App`  | Counter with typed `@raises` errors and a live subscription store backed by SSE. Demos `@dyadpy/svelte`.                                             |
 
 > These examples are **not** published to npm or PyPI. They exist to demo
 > features and catch regressions in real-world setups. Copy/paste from them
@@ -19,12 +19,12 @@ Each example has two halves:
 
 ```
 examples/<name>/
-├── server/                  # Python — runs uvicorn via `tythe dev`
+├── server/                  # Python — runs uvicorn via `dyadpy dev`
 │   ├── app.py
 │   └── pyproject.toml
 └── frontend/                # Whatever JS framework — runs its own dev server
     ├── src/
-    │   └── lib/tythe/
+    │   └── lib/dyadpy/
     │       └── client.ts    # Generated. Don't edit.
     ├── package.json
     └── ...

@@ -1,10 +1,10 @@
 [project]
-name = "tythe-benchmarks"
+name = "dyadpy-benchmarks"
 version = "0.0.0"
-description = "Latency + throughput comparison of Tythe vs FastAPI vs Litestar on identical handlers."
+description = "Latency + throughput comparison of Dyadpy vs FastAPI vs Litestar on identical handlers."
 requires-python = ">=3.12"
 dependencies = [
-    "tythe",
+    "dyadpy",
     "fastapi>=0.115",
     "litestar>=2.12",
     "uvicorn>=0.34",
@@ -14,7 +14,7 @@ dependencies = [
 ]
 
 [tool.uv.sources]
-tythe = { path = "../packages/tythe", editable = true }
+dyadpy = { path = "../packages/dyadpy", editable = true }
 
 [tool.ruff]
 line-length = 100

@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { api, IssueStatus, type Routes } from "../lib/tythe/client";
+import { api, IssueStatus } from "../lib/dyadpy/client";
+import type { Routes } from "../lib/dyadpy/client";
 
 const AUTH = { authorization: "Bearer 1" };
 
@@ -10,12 +11,15 @@ const AUTH = { authorization: "Bearer 1" };
 
 function describe(err: Routes.transitionIssue.Error): string {
   switch (err.kind) {
-    case "IssueNotFound":
+    case "IssueNotFound": {
       return `IssueNotFound (id=${err.issueId})`;
-    case "InvalidStatusTransition":
+    }
+    case "InvalidStatusTransition": {
       return `InvalidStatusTransition ${err.fromStatus} → ${err.toStatus}. Try: ${err.allowed.join(", ")}.`;
-    case "Forbidden":
+    }
+    case "Forbidden": {
       return `Forbidden — ${err.reason}`;
+    }
   }
 }
 

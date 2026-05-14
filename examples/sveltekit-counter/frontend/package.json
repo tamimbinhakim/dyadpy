@@ -11,8 +11,8 @@
     "prepare": "svelte-kit sync || echo ''"
   },
   "dependencies": {
-    "@tythe/svelte": "workspace:*",
-    "@tythe/ts": "workspace:*"
+    "@dyadpy/svelte": "workspace:*",
+    "@dyadpy/ts": "workspace:*"
   },
   "devDependencies": {
     "@sveltejs/adapter-auto": "^7.0.1",

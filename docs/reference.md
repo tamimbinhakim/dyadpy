@@ -1,9 +1,9 @@
 # Reference
 
-Every primitive Tythe exports, what it does, and the smallest example. If a
-feature isn't here, it isn't in `tythe`.
+Every primitive Dyadpy exports, what it does, and the smallest example. If a
+feature isn't here, it isn't in `dyadpy`.
 
-Tythe ships at the wire level: HTTP routes, body / param markers, typed
+Dyadpy ships at the wire level: HTTP routes, body / param markers, typed
 streaming, typed errors, post-response hooks. Nothing higher-level (no
 auth, no rate-limiting, no LLM types).
 
@@ -16,7 +16,7 @@ auth, no rate-limiting, no LLM types).
 - [Dependency injection (`Depends`)](#dependency-injection)
 - [Post-response hooks (`after()`)](#post-response-hooks)
 - [Background jobs (`TaskBackend`)](#background-jobs)
-- [Observability (`tythe.otel`)](#observability)
+- [Observability (`dyadpy.otel`)](#observability)
 - [OpenAPI + polyglot codegen (CLI)](#openapi--polyglot-codegen)
 
 ---
@@ -24,7 +24,7 @@ auth, no rate-limiting, no LLM types).
 ## App + decorators
 
 ```python
-from tythe import App
+from dyadpy import App
 
 app = App()
 
@@ -41,11 +41,11 @@ annotations + the path template.
 
 ## Parameter markers
 
-Inside `Annotated[T, ...]`. Tell Tythe where a value lives on the wire.
+Inside `Annotated[T, ...]`. Tell Dyadpy where a value lives on the wire.
 
 ```python
 from typing import Annotated
-from tythe.params import Body, Cookie, File, Form, Header, Path, Query, UploadFile
+from dyadpy.params import Body, Cookie, File, Form, Header, Path, Query, UploadFile
 
 @app.post("/posts/{post_id}/comments")
 async def add_comment(
@@ -103,7 +103,7 @@ async def login(
 ### Raw bytes — `Bytes`
 
 ```python
-from tythe import Bytes
+from dyadpy import Bytes
 
 @app.post("/webhooks/stripe")
 async def stripe_webhook(
@@ -124,7 +124,7 @@ Content-Type defaults to `application/octet-stream` (override via `set_header`).
 
 ```python
 import msgspec
-from tythe import Form
+from dyadpy import Form
 
 class LoginForm(msgspec.Struct):
     email: str
@@ -142,7 +142,7 @@ inner type directly. TS client sends `URLSearchParams`.
 ### Multipart files — `UploadFile` + `File()`
 
 ```python
-from tythe.params import File, UploadFile
+from dyadpy.params import File, UploadFile
 
 @app.post("/avatar")
 async def upload(file: Annotated[UploadFile, File()]) -> dict[str, int]: ...
@@ -155,7 +155,7 @@ parameter `ctx: Context`. Mutating these from inside the handler shapes the
 final response.
 
 ```python
-from tythe import Context
+from dyadpy import Context
 
 @app.post("/issues")
 async def create_issue(data: CreateIssue, ctx: Context) -> Issue:
@@ -182,7 +182,7 @@ async def create_issue(data: CreateIssue, ctx: Context) -> Issue:
 
 ## Validation errors
 
-When an inbound request fails parameter validation, Tythe returns **HTTP 422**
+When an inbound request fails parameter validation, Dyadpy returns **HTTP 422**
 with a structured body:
 
 ```json
@@ -211,7 +211,7 @@ on the TS side, with `result.ok` narrowing.
 
 ```python
 from dataclasses import dataclass
-from tythe import raises
+from dyadpy import raises
 
 @dataclass
 class IssueNotFound(Exception):
@@ -249,7 +249,7 @@ switch (
 
 ```python
 import asyncio
-from tythe import stream
+from dyadpy import stream
 
 class Tick(msgspec.Struct, tag_field="kind", tag="tick"):
     seq: int
@@ -283,8 +283,8 @@ SSE `id:` and an optional `retry:` hint. The TS client tracks the last
 seen id and reconnects with `Last-Event-Id` if the connection drops:
 
 ```python
-from tythe import SsePayload, Context, stream
-from tythe.params import Header
+from dyadpy import SsePayload, Context, stream
+from dyadpy.params import Header
 from typing import Annotated
 
 @app.get("/events")
@@ -304,7 +304,7 @@ cancellation (`AbortSignal`) still propagate immediately.
 ## Dependency injection
 
 ```python
-from tythe import Depends
+from dyadpy import Depends
 
 def current_user(authorization: Annotated[str, Header()] = "") -> User:
     if not authorization.startswith("Bearer "):
@@ -323,7 +323,7 @@ teardown after the response is finalized. Same shape as FastAPI.
 ## Post-response hooks
 
 ```python
-from tythe import after
+from dyadpy import after
 
 @app.post("/posts")
 async def create_post(data: CreatePost) -> Post:
@@ -345,7 +345,7 @@ In-memory queue ships in core. Redis / SQS adapters live in their own
 packages.
 
 ```python
-from tythe import InMemoryBackend, TaskBackend, TaskState
+from dyadpy import InMemoryBackend, TaskBackend, TaskState
 
 backend: TaskBackend = InMemoryBackend()
 
@@ -372,7 +372,7 @@ queued → running → succeeded/failed/cancelled lifecycle.
 single handler, so you don't hand-write the three routes:
 
 ```python
-from tythe import App, InMemoryBackend, mount_task_routes
+from dyadpy import App, InMemoryBackend, mount_task_routes
 
 app = App()
 backend = InMemoryBackend()
@@ -399,31 +399,31 @@ shape produced by request validation errors.
 ## Observability
 
 ```python
-from tythe import App
-from tythe.otel import instrument
+from dyadpy import App
+from dyadpy.otel import instrument
 
 app = instrument(App())
 ```
 
 Adds one OpenTelemetry span per request with method, path, and status code.
 No-op if `opentelemetry-api` isn't installed (it's an optional extra:
-`tythe[otel]`).
+`dyadpy[otel]`).
 
 ## OpenAPI + polyglot codegen
 
 CLI commands that read the same IR the TS codegen uses:
 
 ```bash
-tythe openapi server.app:app --out openapi.json
-tythe swift server.app:app --out Tythe.swift
-tythe kotlin server.app:app --out Tythe.kt --package com.example.api
+dyadpy openapi server.app:app --out openapi.json
+dyadpy swift server.app:app --out Dyadpy.swift
+dyadpy kotlin server.app:app --out Dyadpy.kt --package com.example.api
 ```
 
-- **`tythe openapi`** — OpenAPI 3.1 doc for external clients (consumers
-  who can't use Tythe's TS client).
-- **`tythe swift`** — typed Swift client using URLSession + JSONEncoder
+- **`dyadpy openapi`** — OpenAPI 3.1 doc for external clients (consumers
+  who can't use Dyadpy's TS client).
+- **`dyadpy swift`** — typed Swift client using URLSession + JSONEncoder
   with `convertToSnakeCase`.
-- **`tythe kotlin`** — typed Kotlin client using HttpURLConnection +
+- **`dyadpy kotlin`** — typed Kotlin client using HttpURLConnection +
   `kotlinx.serialization` (no ktor/OkHttp dep).
 
 Streaming endpoints surface as `URLRequest` (Swift) / raw `String` (Kotlin) —
@@ -433,7 +433,7 @@ caller wires SSE through their platform's preferred parser.
 
 By design. See [`docs/design.md`](./design.md) for the reasoning.
 
-- No `tythe.ai` / LLM-shaped types — LLM tokens are just typed events on
+- No `dyadpy.ai` / LLM-shaped types — LLM tokens are just typed events on
   an SSE stream; use the existing `stream[T]` primitive.
 - No auth implementation — wire `Depends(current_user)` to your provider
   (Clerk / Auth0 / custom JWT). See [`docs/auth.md`](./auth.md).

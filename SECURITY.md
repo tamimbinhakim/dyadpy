@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-Until Tythe hits `1.0`, only the latest minor receives security fixes.
+Until Dyadpy hits `1.0`, only the latest minor receives security fixes.
 
 | Version        | Supported           |
 | -------------- | ------------------- |
@@ -25,16 +25,16 @@ I aim to acknowledge reports within **72 hours** and work with you on a
 fix and a coordinated disclosure timeline (usually 7–30 days depending on
 severity).
 
-[report]: https://github.com/tamimbinhakim/tythe/security/advisories/new
+[report]: https://github.com/tamimbinhakim/dyadpy/security/advisories/new
 
 ## Scope
 
 In scope:
 
-- The `tythe` Python package
-- The `@tythe/ts` TypeScript package
-- The codegen output (`client.ts` produced by Tythe)
-- The Tythe CLI
+- The `dyadpy` Python package
+- The `@dyadpy/ts` TypeScript package
+- The codegen output (`client.ts` produced by Dyadpy)
+- The Dyadpy CLI
 
 Out of scope:
 

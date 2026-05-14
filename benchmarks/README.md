@@ -1,4 +1,4 @@
-# Benchmarks — Tythe vs FastAPI vs Litestar
+# Benchmarks — Dyadpy vs FastAPI vs Litestar
 
 Identical handlers across all three frameworks, served by the same uvicorn
 build, driven by an in-process asyncio + httpx load generator. The goal is
@@ -24,7 +24,7 @@ All three apps expose the same four routes:
 | `POST /echo`      | typed body `{"text": str}` → echoes it. Hits request validation + JSON. |
 | `GET /list`       | 50-element array. Hits response serialization.                          |
 
-The Tythe handler set is in [`apps/tythe_app.py`](apps/tythe_app.py); the
+The Dyadpy handler set is in [`apps/dyadpy_app.py`](apps/dyadpy_app.py); the
 FastAPI and Litestar peers live alongside it and produce byte-identical
 wire output.
 
@@ -35,7 +35,7 @@ cd benchmarks
 uv sync                       # one-time
 uv run bench.py               # full matrix (default 10s, concurrency 64)
 uv run bench.py --duration 5  # quick smoke
-uv run bench.py --frameworks tythe fastapi
+uv run bench.py --frameworks dyadpy fastapi
 ```
 
 Each run writes a timestamped directory under `results/`:
@@ -70,7 +70,7 @@ machine — your numbers will differ):
 
 | Framework | Cold start |
 | --------- | ---------: |
-| tythe     |     109 ms |
+| dyadpy    |     109 ms |
 | fastapi   |     222 ms |
 | litestar  |     265 ms |
 
@@ -82,9 +82,9 @@ release artifact uses numbers measured on dedicated CI hardware.
 ## Why these three
 
 - **FastAPI** is the dominant Python web framework today.
-- **Litestar** is the closest peer to Tythe in design — msgspec-first,
+- **Litestar** is the closest peer to Dyadpy in design — msgspec-first,
   ASGI-native, performance-oriented.
-- **Tythe** is the subject under test.
+- **Dyadpy** is the subject under test.
 
 Numbers measured against Flask / Django / aiohttp are interesting but
 belong in a different report; those frameworks make different trade-offs

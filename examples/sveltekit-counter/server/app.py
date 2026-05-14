@@ -1,4 +1,4 @@
-"""SvelteKit counter — minimal Tythe + Svelte 5 + TanStack-free stores demo."""
+"""SvelteKit counter — minimal Dyadpy + Svelte 5 + TanStack-free stores demo."""
 
 # pyright: basic
 
@@ -8,7 +8,7 @@ import asyncio
 from dataclasses import dataclass
 
 import msgspec
-from tythe import App, raises, stream
+from dyadpy import App, raises, stream
 
 app = App()
 

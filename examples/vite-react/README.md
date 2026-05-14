@@ -12,7 +12,7 @@ errors, and the dev loop — without any AI distractions.
 ```python
 # server/app.py
 from dataclasses import dataclass
-from tythe import App, raises
+from dyadpy import App, raises
 import msgspec
 
 app = App()
@@ -54,7 +54,7 @@ async def create_post(data: CreatePost) -> Post:
 
 ```tsx
 // frontend/src/App.tsx
-import { api } from "./lib/tythe/client";
+import { api } from "./lib/dyadpy/client";
 import { useEffect, useState } from "react";
 
 export default function App() {
@@ -85,7 +85,7 @@ export default function App() {
 # Terminal 1 — server
 cd examples/vite-react/server
 uv sync
-uv run tythe dev app:app --out ../frontend/src/lib/tythe/client.ts
+uv run dyadpy dev app:app --out ../frontend/src/lib/dyadpy/client.ts
 
 # Terminal 2 — frontend
 cd examples/vite-react/frontend

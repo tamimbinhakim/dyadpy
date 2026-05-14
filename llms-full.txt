@@ -1,7 +1,7 @@
-# Tythe — Full Documentation
+# Dyadpy — Full Documentation
 
 This file is a single-document concatenation of every essential doc in
-the Tythe repository, structured for consumption by large-context
+the Dyadpy repository, structured for consumption by large-context
 language models. The canonical source for each section is linked at the
 section header; if anything here contradicts the canonical file, the
 canonical file wins.
@@ -27,15 +27,13 @@ _Source: [README.md](./README.md)_
 
 <div align="center">
 
-# Tythe
-
-_pronounced **"tythe"** — rhymes with "scythe" (`/taɪð/`)_
+# Dyadpy
 
 **Write a Python handler. Call it from TypeScript with full types. No DTOs, no OpenAPI codegen, no broken types after a refactor.**
 
-[![CI](https://github.com/tamimbinhakim/tythe/actions/workflows/ci.yml/badge.svg)](https://github.com/tamimbinhakim/tythe/actions/workflows/ci.yml)
-[![PyPI](https://img.shields.io/pypi/v/tythe.svg)](https://pypi.org/project/tythe/)
-[![npm](https://img.shields.io/npm/v/@tythe/ts.svg)](https://www.npmjs.com/package/@tythe/ts)
+[![CI](https://github.com/tamimbinhakim/dyadpy/actions/workflows/ci.yml/badge.svg)](https://github.com/tamimbinhakim/dyadpy/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/dyadpy.svg)](https://pypi.org/project/dyadpy/)
+[![npm](https://img.shields.io/npm/v/@dyadpy/ts.svg)](https://www.npmjs.com/package/@dyadpy/ts)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
 [**Quickstart**](./docs/getting-started.md) · [**Docs**](./docs) · [**Examples**](./examples)
@@ -46,7 +44,7 @@ _pronounced **"tythe"** — rhymes with "scythe" (`/taɪð/`)_
 
 ```python
 # server/app.py
-from tythe import App
+from dyadpy import App
 import msgspec
 
 app = App()
@@ -63,13 +61,13 @@ async def get_user(user_id: int) -> User:
 
 ```ts
 // frontend/anywhere.tsx
-import { api } from "@/lib/tythe/client";
+import { api } from "@/lib/dyadpy/client";
 
 const user = await api.getUser({ userId: 1 });
 //    ^? User — full type, autocomplete, refactor-safe
 ```
 
-That's the whole loop. `tythe dev` rewrites `client.ts` every time you save Python, so the TS side is always in sync.
+That's the whole loop. `dyadpy dev` rewrites `client.ts` every time you save Python, so the TS side is always in sync.
 
 ## Why you'd use it
 
@@ -78,9 +76,9 @@ That's the whole loop. `tythe dev` rewrites `client.ts` every time you save Pyth
 - **Typed streaming out of the box.** `stream[T]` becomes `AsyncIterable<T>` on the client, with auto-reconnect on drop.
 - **Typed errors as discriminated unions.** `@raises(NotFound, Forbidden)` → `Result<T, NotFound | Forbidden>`. The compiler forces you to handle each case.
 - **One file, not twelve.** The generated client is a single `client.ts` you can read, diff, and grep.
-- **Framework-agnostic on both ends.** Python web framework: tythe (Starlette under the hood). Frontend: anything that runs TS — Next.js, Vite, SvelteKit, Astro, Solid Start.
-- **First-class hooks for the big three.** `@tythe/react` (TanStack Query), `@tythe/svelte` (stores), `@tythe/solid` (resources). Server-side prefetch helpers ship with each.
-- **Fast.** msgspec on the hot path — 2–30× faster than Pydantic v2 on decode/encode. Pydantic still ships as a first-class plugin (`tythe[pydantic]`).
+- **Framework-agnostic on both ends.** Python web framework: dyadpy (Starlette under the hood). Frontend: anything that runs TS — Next.js, Vite, SvelteKit, Astro, Solid Start.
+- **First-class hooks for the big three.** `@dyadpy/react` (TanStack Query), `@dyadpy/svelte` (stores), `@dyadpy/solid` (resources). Server-side prefetch helpers ship with each.
+- **Fast.** msgspec on the hot path — 2–30× faster than Pydantic v2 on decode/encode. Pydantic still ships as a first-class plugin (`dyadpy[pydantic]`).
 
 ## What it ships
 
@@ -98,8 +96,8 @@ That's the whole loop. `tythe dev` rewrites `client.ts` every time you save Pyth
 | `Depends(provider)`                             | FastAPI-shape dependency injection. Plain / async / generator providers.    |
 | `after(fn, *args, **kw)`                        | Run a callback after the response is sent.                                  |
 | `mount_task_routes(...)`                        | Long-running jobs: submit + status + stream from one handler.               |
-| `tythe.otel.instrument(app)`                    | One OpenTelemetry span per request (optional extra: `tythe[otel]`).         |
-| `tythe openapi / swift / kotlin` (CLI)          | Emit OpenAPI 3.1, Swift, or Kotlin clients off the same IR.                 |
+| `dyadpy.otel.instrument(app)`                    | One OpenTelemetry span per request (optional extra: `dyadpy[otel]`).         |
+| `dyadpy openapi / swift / kotlin` (CLI)          | Emit OpenAPI 3.1, Swift, or Kotlin clients off the same IR.                 |
 
 Full surface in [`docs/reference.md`](./docs/reference.md).
 
@@ -107,19 +105,19 @@ Full surface in [`docs/reference.md`](./docs/reference.md).
 
 ```bash
 # Server
-uv add tythe
+uv add dyadpy
 
 # Client runtime (any frontend)
-pnpm add @tythe/ts
+pnpm add @dyadpy/ts
 
 # Framework hooks (optional)
-pnpm add @tythe/react   # or @tythe/svelte / @tythe/solid
+pnpm add @dyadpy/react   # or @dyadpy/svelte / @dyadpy/solid
 ```
 
 ## Run
 
 ```bash
-tythe dev server.app:app --out ../frontend/src/lib/tythe/client.ts
+dyadpy dev server.app:app --out ../frontend/src/lib/dyadpy/client.ts
 ```
 
 What that does:
@@ -132,11 +130,11 @@ That's it. Walkthrough in [docs/getting-started.md](./docs/getting-started.md).
 
 ## How it compares
 
-|                        | **Tythe**                               | FastAPI + openapi-typescript | tRPC          | Connect-RPC              |
+|                        | **Dyadpy**                               | FastAPI + openapi-typescript | tRPC          | Connect-RPC              |
 | ---------------------- | --------------------------------------- | ---------------------------- | ------------- | ------------------------ |
 | Backend lang           | **Python**                              | Python                       | TypeScript    | Polyglot                 |
 | DTO duplication        | **None**                                | Yes                          | None          | Yes (`.proto`)           |
-| Codegen step           | **Invisible (`tythe dev`)**             | Manual rerun                 | None          | `buf gen`                |
+| Codegen step           | **Invisible (`dyadpy dev`)**             | Manual rerun                 | None          | `buf gen`                |
 | Streaming type-safe    | **Yes (typed SSE)**                     | Manual                       | Subscriptions | Yes                      |
 | Typed errors → TS      | **Discriminated union**                 | HTTP codes                   | `TRPCError`   | Yes                      |
 | Best for               | **Python backend + modern TS frontend** | External clients             | TS monorepo   | Cross-team microservices |
@@ -147,19 +145,19 @@ Server-rendered first paint with no waterfall. Each framework has a prefetch hel
 
 ```tsx
 // Next.js App Router
-import { prefetchQuery } from "@tythe/react/server";
+import { prefetchQuery } from "@dyadpy/react/server";
 await prefetchQuery(queryClient, api, "getUser", { userId: 1 });
 ```
 
 ```ts
 // SvelteKit
-import { loadQuery } from "@tythe/svelte/server";
+import { loadQuery } from "@dyadpy/svelte/server";
 export const load = (event) => ({ me: await loadQuery(api, "me", undefined, event) });
 ```
 
 ```tsx
 // Solid Start
-import { serverQuery } from "@tythe/solid/server";
+import { serverQuery } from "@dyadpy/solid/server";
 return serverQuery(api, "me", undefined, event.request);
 ```
 
@@ -169,11 +167,11 @@ Auth/cookies/tracing headers forward automatically via [`forwardHeaders`](./docs
 
 | Package                                          | What it is                                                                                  | Status |
 | ------------------------------------------------ | ------------------------------------------------------------------------------------------- | ------ |
-| [`tythe`](./packages/tythe) (PyPI)               | Python framework, CLI, codegen.                                                             | v0.1   |
-| [`@tythe/ts`](./packages/tythe-ts) (npm)         | ~3 KB framework-agnostic TS runtime. Works with any frontend.                               | v0.1   |
-| [`@tythe/react`](./packages/tythe-react) (npm)   | React hooks (`useQuery`, `useMutation`, `useSubscription`) on TanStack Query + SSR helpers. | v0.1   |
-| [`@tythe/svelte`](./packages/tythe-svelte) (npm) | Svelte 5 store bindings + SSR helpers.                                                      | v0.1   |
-| [`@tythe/solid`](./packages/tythe-solid) (npm)   | SolidJS resource bindings + SSR helpers.                                                    | v0.1   |
+| [`dyadpy`](./packages/dyadpy) (PyPI)               | Python framework, CLI, codegen.                                                             | v0.1   |
+| [`@dyadpy/ts`](./packages/dyadpy-ts) (npm)         | ~3 KB framework-agnostic TS runtime. Works with any frontend.                               | v0.1   |
+| [`@dyadpy/react`](./packages/dyadpy-react) (npm)   | React hooks (`useQuery`, `useMutation`, `useSubscription`) on TanStack Query + SSR helpers. | v0.1   |
+| [`@dyadpy/svelte`](./packages/dyadpy-svelte) (npm) | Svelte 5 store bindings + SSR helpers.                                                      | v0.1   |
+| [`@dyadpy/solid`](./packages/dyadpy-solid) (npm)   | SolidJS resource bindings + SSR helpers.                                                    | v0.1   |
 
 ## Stability
 
@@ -215,7 +213,7 @@ Five minutes from clone to a typed Python ↔ TypeScript call.
 
 | Tool   | Version | Why                                          |
 | ------ | ------- | -------------------------------------------- |
-| Python | ≥ 3.11  | Tythe uses modern type-hint syntax.          |
+| Python | ≥ 3.11  | Dyadpy uses modern type-hint syntax.          |
 | Node   | ≥ 20    | For your frontend toolchain.                 |
 | `uv`   | latest  | Python package manager. `brew install uv`.   |
 | `pnpm` | ≥ 9     | Or `npm` / `yarn`, but pnpm is what I'd use. |
@@ -224,17 +222,17 @@ Five minutes from clone to a typed Python ↔ TypeScript call.
 
 ```bash
 # In your Python project
-uv add tythe
+uv add dyadpy
 
 # In your frontend project
-pnpm add @tythe/ts
+pnpm add @dyadpy/ts
 ```
 
 ## 2. Write a handler
 
 ```python
 # server/app.py
-from tythe import App
+from dyadpy import App
 import msgspec
 
 app = App()
@@ -266,23 +264,23 @@ The handler signature is the API contract. No `class PostRequest(BaseModel)` in 
 ## 3. Run dev
 
 ```bash
-tythe dev server.app:app --out ../frontend/src/lib/tythe/client.ts
+dyadpy dev server.app:app --out ../frontend/src/lib/dyadpy/client.ts
 ```
 
 - Uvicorn starts on `http://127.0.0.1:8000`.
-- Tythe watches `*.py` and rewrites the generated `client.ts` atomically on save.
+- Dyadpy watches `*.py` and rewrites the generated `client.ts` atomically on save.
 
 For a one-shot codegen (no server, no watcher):
 
 ```bash
-tythe codegen server.app:app --out ../frontend/src/lib/tythe/client.ts
+dyadpy codegen server.app:app --out ../frontend/src/lib/dyadpy/client.ts
 ```
 
 ## 4. Call it
 
 ```ts
 // frontend/src/app/page.tsx
-import { api } from "@/lib/tythe/client";
+import { api } from "@/lib/dyadpy/client";
 
 const post = await api.createPost({ data: { title: "first", body: "hello" } });
 //    ^? Post
@@ -298,7 +296,7 @@ Hover `api.createPost` in your editor. Return type: `Post`. Param type: `CreateP
 `stream[T]` return → SSE on the wire → `AsyncIterable<T>` on the client.
 
 ```python
-from tythe import stream
+from dyadpy import stream
 import msgspec, asyncio
 
 class Tick(msgspec.Struct, tag="tick"):
@@ -330,7 +328,7 @@ Cancellation: pass an `AbortSignal`. The server sees the disconnect via `request
 
 ```python
 from dataclasses import dataclass
-from tythe import raises
+from dyadpy import raises
 
 @dataclass
 class PostNotFound(Exception):
@@ -362,7 +360,7 @@ Each has a one-liner here and a full example in [reference](./reference.md).
 ### Raw bodies — `Bytes`
 
 ```python
-from tythe import Bytes
+from dyadpy import Bytes
 
 @app.post("/webhooks/stripe")
 async def stripe(body: Bytes, sig: Annotated[str, Header("stripe-signature")]) -> None:
@@ -378,7 +376,7 @@ TS: `Blob | Uint8Array | ArrayBuffer` in, `Blob` out.
 ### Form bodies
 
 ```python
-from tythe import Form
+from dyadpy import Form
 
 class LoginForm(msgspec.Struct):
     email: str
@@ -393,7 +391,7 @@ Wire: `application/x-www-form-urlencoded` (or multipart with files).
 ### Response control — `Context`
 
 ```python
-from tythe import Context
+from dyadpy import Context
 
 @app.post("/issues")
 async def create(data: CreateIssue, ctx: Context) -> Issue:
@@ -407,7 +405,7 @@ async def create(data: CreateIssue, ctx: Context) -> Issue:
 ### Post-response hooks — `after()`
 
 ```python
-from tythe import after
+from dyadpy import after
 
 @app.post("/posts")
 async def create_post(data: CreatePost) -> Post:
@@ -435,7 +433,7 @@ Prefetch on the server, hydrate on the client — first paint with no waterfall.
 
 ```tsx
 // Next.js App Router server component
-import { prefetchQuery } from "@tythe/react/server";
+import { prefetchQuery } from "@dyadpy/react/server";
 
 const qc = new QueryClient();
 await prefetchQuery(qc, api, "getUser", { userId: 1 });
@@ -455,10 +453,10 @@ Full SSR guide: [`docs/ssr.md`](./ssr.md).
 ## Troubleshooting
 
 **The watcher says "no `App` found".**
-`tythe dev` takes `module:attr`, not a path. Make sure `server/app.py` defines `app = App()` and the working directory is the Python project root.
+`dyadpy dev` takes `module:attr`, not a path. Make sure `server/app.py` defines `app = App()` and the working directory is the Python project root.
 
 **My TS types are `any`.**
-You're missing `@tythe/ts`, or your editor hasn't picked up the generated `client.ts`. Restart the TypeScript server.
+You're missing `@dyadpy/ts`, or your editor hasn't picked up the generated `client.ts`. Restart the TypeScript server.
 
 **Streaming doesn't cancel server-side.**
 Your handler needs to periodically `await` (or check `request.is_disconnected()`). A tight CPU loop will keep running until the next await.
@@ -472,10 +470,10 @@ _Source: [docs/reference.md](./docs/reference.md)_
 
 # Reference
 
-Every primitive Tythe exports, what it does, and the smallest example. If a
-feature isn't here, it isn't in `tythe`.
+Every primitive Dyadpy exports, what it does, and the smallest example. If a
+feature isn't here, it isn't in `dyadpy`.
 
-Tythe ships at the wire level: HTTP routes, body / param markers, typed
+Dyadpy ships at the wire level: HTTP routes, body / param markers, typed
 streaming, typed errors, post-response hooks. Nothing higher-level (no
 auth, no rate-limiting, no LLM types).
 
@@ -488,7 +486,7 @@ auth, no rate-limiting, no LLM types).
 - [Dependency injection (`Depends`)](#dependency-injection)
 - [Post-response hooks (`after()`)](#post-response-hooks)
 - [Background jobs (`TaskBackend`)](#background-jobs)
-- [Observability (`tythe.otel`)](#observability)
+- [Observability (`dyadpy.otel`)](#observability)
 - [OpenAPI + polyglot codegen (CLI)](#openapi--polyglot-codegen)
 
 ---
@@ -496,7 +494,7 @@ auth, no rate-limiting, no LLM types).
 ## App + decorators
 
 ```python
-from tythe import App
+from dyadpy import App
 
 app = App()
 
@@ -513,11 +511,11 @@ annotations + the path template.
 
 ## Parameter markers
 
-Inside `Annotated[T, ...]`. Tell Tythe where a value lives on the wire.
+Inside `Annotated[T, ...]`. Tell Dyadpy where a value lives on the wire.
 
 ```python
 from typing import Annotated
-from tythe.params import Body, Cookie, File, Form, Header, Path, Query, UploadFile
+from dyadpy.params import Body, Cookie, File, Form, Header, Path, Query, UploadFile
 
 @app.post("/posts/{post_id}/comments")
 async def add_comment(
@@ -575,7 +573,7 @@ async def login(
 ### Raw bytes — `Bytes`
 
 ```python
-from tythe import Bytes
+from dyadpy import Bytes
 
 @app.post("/webhooks/stripe")
 async def stripe_webhook(
@@ -596,7 +594,7 @@ Content-Type defaults to `application/octet-stream` (override via `set_header`).
 
 ```python
 import msgspec
-from tythe import Form
+from dyadpy import Form
 
 class LoginForm(msgspec.Struct):
     email: str
@@ -614,7 +612,7 @@ inner type directly. TS client sends `URLSearchParams`.
 ### Multipart files — `UploadFile` + `File()`
 
 ```python
-from tythe.params import File, UploadFile
+from dyadpy.params import File, UploadFile
 
 @app.post("/avatar")
 async def upload(file: Annotated[UploadFile, File()]) -> dict[str, int]: ...
@@ -627,7 +625,7 @@ parameter `ctx: Context`. Mutating these from inside the handler shapes the
 final response.
 
 ```python
-from tythe import Context
+from dyadpy import Context
 
 @app.post("/issues")
 async def create_issue(data: CreateIssue, ctx: Context) -> Issue:
@@ -654,7 +652,7 @@ async def create_issue(data: CreateIssue, ctx: Context) -> Issue:
 
 ## Validation errors
 
-When an inbound request fails parameter validation, Tythe returns **HTTP 422**
+When an inbound request fails parameter validation, Dyadpy returns **HTTP 422**
 with a structured body:
 
 ```json
@@ -683,7 +681,7 @@ on the TS side, with `result.ok` narrowing.
 
 ```python
 from dataclasses import dataclass
-from tythe import raises
+from dyadpy import raises
 
 @dataclass
 class IssueNotFound(Exception):
@@ -721,7 +719,7 @@ switch (
 
 ```python
 import asyncio
-from tythe import stream
+from dyadpy import stream
 
 class Tick(msgspec.Struct, tag_field="kind", tag="tick"):
     seq: int
@@ -755,8 +753,8 @@ SSE `id:` and an optional `retry:` hint. The TS client tracks the last
 seen id and reconnects with `Last-Event-Id` if the connection drops:
 
 ```python
-from tythe import SsePayload, Context, stream
-from tythe.params import Header
+from dyadpy import SsePayload, Context, stream
+from dyadpy.params import Header
 from typing import Annotated
 
 @app.get("/events")
@@ -776,7 +774,7 @@ cancellation (`AbortSignal`) still propagate immediately.
 ## Dependency injection
 
 ```python
-from tythe import Depends
+from dyadpy import Depends
 
 def current_user(authorization: Annotated[str, Header()] = "") -> User:
     if not authorization.startswith("Bearer "):
@@ -795,7 +793,7 @@ teardown after the response is finalized. Same shape as FastAPI.
 ## Post-response hooks
 
 ```python
-from tythe import after
+from dyadpy import after
 
 @app.post("/posts")
 async def create_post(data: CreatePost) -> Post:
@@ -817,7 +815,7 @@ In-memory queue ships in core. Redis / SQS adapters live in their own
 packages.
 
 ```python
-from tythe import InMemoryBackend, TaskBackend, TaskState
+from dyadpy import InMemoryBackend, TaskBackend, TaskState
 
 backend: TaskBackend = InMemoryBackend()
 
@@ -844,7 +842,7 @@ queued → running → succeeded/failed/cancelled lifecycle.
 single handler, so you don't hand-write the three routes:
 
 ```python
-from tythe import App, InMemoryBackend, mount_task_routes
+from dyadpy import App, InMemoryBackend, mount_task_routes
 
 app = App()
 backend = InMemoryBackend()
@@ -871,31 +869,31 @@ shape produced by request validation errors.
 ## Observability
 
 ```python
-from tythe import App
-from tythe.otel import instrument
+from dyadpy import App
+from dyadpy.otel import instrument
 
 app = instrument(App())
 ```
 
 Adds one OpenTelemetry span per request with method, path, and status code.
 No-op if `opentelemetry-api` isn't installed (it's an optional extra:
-`tythe[otel]`).
+`dyadpy[otel]`).
 
 ## OpenAPI + polyglot codegen
 
 CLI commands that read the same IR the TS codegen uses:
 
 ```bash
-tythe openapi server.app:app --out openapi.json
-tythe swift server.app:app --out Tythe.swift
-tythe kotlin server.app:app --out Tythe.kt --package com.example.api
+dyadpy openapi server.app:app --out openapi.json
+dyadpy swift server.app:app --out Dyadpy.swift
+dyadpy kotlin server.app:app --out Dyadpy.kt --package com.example.api
 ```
 
-- **`tythe openapi`** — OpenAPI 3.1 doc for external clients (consumers
-  who can't use Tythe's TS client).
-- **`tythe swift`** — typed Swift client using URLSession + JSONEncoder
+- **`dyadpy openapi`** — OpenAPI 3.1 doc for external clients (consumers
+  who can't use Dyadpy's TS client).
+- **`dyadpy swift`** — typed Swift client using URLSession + JSONEncoder
   with `convertToSnakeCase`.
-- **`tythe kotlin`** — typed Kotlin client using HttpURLConnection +
+- **`dyadpy kotlin`** — typed Kotlin client using HttpURLConnection +
   `kotlinx.serialization` (no ktor/OkHttp dep).
 
 Streaming endpoints surface as `URLRequest` (Swift) / raw `String` (Kotlin) —
@@ -905,7 +903,7 @@ caller wires SSE through their platform's preferred parser.
 
 By design. See [`docs/design.md`](./design.md) for the reasoning.
 
-- No `tythe.ai` / LLM-shaped types — LLM tokens are just typed events on
+- No `dyadpy.ai` / LLM-shaped types — LLM tokens are just typed events on
   an SSE stream; use the existing `stream[T]` primitive.
 - No auth implementation — wire `Depends(current_user)` to your provider
   (Clerk / Auth0 / custom JWT). See [`docs/auth.md`](./auth.md).
@@ -923,7 +921,7 @@ _Source: [docs/architecture.md](./docs/architecture.md)_
 
 # Architecture
 
-This is what's actually happening when you type `tythe dev`. It's not magic,
+This is what's actually happening when you type `dyadpy dev`. It's not magic,
 and the parts are small enough that you can read the whole thing in a
 weekend.
 
@@ -942,10 +940,10 @@ your Python handlers
     Codegen        (IR → single client.ts)
         │
         ▼
-your frontend's src/lib/tythe/client.ts
+your frontend's src/lib/dyadpy/client.ts
         │
         ▼
-    @tythe/ts    (~3 KB runtime, Proxy dispatch + SSE)
+    @dyadpy/ts    (~3 KB runtime, Proxy dispatch + SSE)
 ```
 
 Two flows: **server start** rebuilds the IR and writes `client.ts`; **at
@@ -954,7 +952,7 @@ encodes the response.
 
 ## Layer by layer
 
-### 1. `App` and route registration (`tythe/app.py`)
+### 1. `App` and route registration (`dyadpy/app.py`)
 
 The `App` is a plain dataclass with a list of `Route` records. Decorators
 (`@app.get`, `@app.post`, …) just append to the list. There are no globals,
@@ -970,7 +968,7 @@ async def get_user(user_id: int) -> User: ...
 Why this matters: tests can build an `App`, populate it, introspect it, and
 throw it away — all without booting a server.
 
-### 2. IR extraction (`tythe/ir.py`)
+### 2. IR extraction (`dyadpy/ir.py`)
 
 At server start (and on every reload) the IR builder walks each `Route`:
 
@@ -981,12 +979,12 @@ At server start (and on every reload) the IR builder walks each `Route`:
    that share `$ref`-style components for repeated types.
 4. Return-type analysis: `AsyncIterator[T]` (or the friendlier
    `stream[T]`) → a streaming endpoint; `Task[T]` → long-running.
-5. `tythe.errors.get_declared_raises(handler)` → the typed-error union.
+5. `dyadpy.errors.get_declared_raises(handler)` → the typed-error union.
 
 The output is a plain dataclass tree (`AppIR`) — serializable to JSON,
 inspectable in the REPL, easy to snapshot in tests.
 
-### 3. ASGI transport (`tythe/app.py` + Starlette under the hood)
+### 3. ASGI transport (`dyadpy/app.py` + Starlette under the hood)
 
 The runtime is Starlette underneath. We don't reinvent routing, ASGI
 lifespan, or middleware — that ecosystem is solid.
@@ -1005,7 +1003,7 @@ For typed errors: if the handler raises one of the exceptions declared in
 `@raises(...)`, the runtime wraps it in the `Result` envelope. Anything else
 becomes a 500 and is logged.
 
-### 4. Codegen (`tythe/codegen.py`)
+### 4. Codegen (`dyadpy/codegen.py`)
 
 Codegen reads an `AppIR` and emits one TypeScript file. The strategy:
 
@@ -1024,9 +1022,9 @@ Codegen reads an `AppIR` and emits one TypeScript file. The strategy:
 The output is **one** file. Not a `client/` directory. Not 12 `*.types.ts`
 files. One file you import.
 
-### 5. The dev loop (`tythe/cli.py` + `watchfiles`)
+### 5. The dev loop (`dyadpy/cli.py` + `watchfiles`)
 
-`tythe dev` does three things in one process:
+`dyadpy dev` does three things in one process:
 
 1. Spawn uvicorn with reload enabled (so handler edits hot-reload).
 2. Watch `*.py` with `watchfiles` and rerun IR extraction on change.
@@ -1035,7 +1033,7 @@ files. One file you import.
 
 Everything is logged with `rich` so the terminal stays readable.
 
-### 6. The TS runtime (`@tythe/ts`)
+### 6. The TS runtime (`@dyadpy/ts`)
 
 The runtime is ~3 KB min+gz. It exports:
 
@@ -1053,7 +1051,7 @@ Zero dependencies. ESM-first. Side-effect-free. Tree-shakable.
 A few decisions I want to call out explicitly.
 
 **Why an IR at all, instead of inspect → string?**
-Because polyglot. The IR is JSON Schema 2020-12 with a thin Tythe layer for
+Because polyglot. The IR is JSON Schema 2020-12 with a thin Dyadpy layer for
 streams/errors/tasks. The day someone wants a Swift or Kotlin client, we
 walk the same IR with a different renderer.
 
@@ -1061,7 +1059,7 @@ walk the same IR with a different renderer.
 Speed and tightness of the JSON Schema output. msgspec is 2–30× faster than
 Pydantic v2 on the codecs that matter for high-throughput endpoints, and its
 schema export is conservative and predictable. Pydantic ships as a
-first-class plugin (`tythe[pydantic]`) for users who want it.
+first-class plugin (`dyadpy[pydantic]`) for users who want it.
 
 **Why SSE for streaming, not WebSockets?**
 Browser support is built in (`EventSource`), it passes proxies cleanly, and
@@ -1076,12 +1074,12 @@ hand-writing (or generating) one function per endpoint.
 
 ## Where to read the code
 
-- [`packages/tythe/src/tythe/app.py`](../packages/tythe/src/tythe/app.py)
-- [`packages/tythe/src/tythe/ir.py`](../packages/tythe/src/tythe/ir.py)
-- [`packages/tythe/src/tythe/codegen.py`](../packages/tythe/src/tythe/codegen.py)
-- [`packages/tythe/src/tythe/streaming.py`](../packages/tythe/src/tythe/streaming.py)
-- [`packages/tythe/src/tythe/cli.py`](../packages/tythe/src/tythe/cli.py)
-- [`packages/tythe-ts/src/`](../packages/tythe-ts/src)
+- [`packages/dyadpy/src/dyadpy/app.py`](../packages/dyadpy/src/dyadpy/app.py)
+- [`packages/dyadpy/src/dyadpy/ir.py`](../packages/dyadpy/src/dyadpy/ir.py)
+- [`packages/dyadpy/src/dyadpy/codegen.py`](../packages/dyadpy/src/dyadpy/codegen.py)
+- [`packages/dyadpy/src/dyadpy/streaming.py`](../packages/dyadpy/src/dyadpy/streaming.py)
+- [`packages/dyadpy/src/dyadpy/cli.py`](../packages/dyadpy/src/dyadpy/cli.py)
+- [`packages/dyadpy-ts/src/`](../packages/dyadpy-ts/src)
 
 If you read all of those and still have a "wait, how does X work?" question,
 that's a docs bug. Please file it.
@@ -1095,7 +1093,7 @@ _Source: [docs/design.md](./docs/design.md)_
 
 # Design
 
-The choices Tythe makes, what they buy you, and what they cost.
+The choices Dyadpy makes, what they buy you, and what they cost.
 
 ## The contract: your function signature
 
@@ -1110,7 +1108,7 @@ What this gets you:
 
 - One source of truth. No `class CreatePostRequest(BaseModel)` floating in `schemas/`.
 - The type-checker is the linter. Adding a field on the Python side fails the TS build until the client uses it.
-- No tools to learn beyond `tythe dev`. Editors do the rest.
+- No tools to learn beyond `dyadpy dev`. Editors do the rest.
 
 What it costs you:
 
@@ -1118,7 +1116,7 @@ What it costs you:
 
 ## Codegen exists, but you never see it
 
-One command — `tythe dev` — runs your ASGI app, watches files, and writes one `client.ts` into your frontend. No `package.json` script. No pre-commit hook. No "did CI run codegen?". The watcher owns it.
+One command — `dyadpy dev` — runs your ASGI app, watches files, and writes one `client.ts` into your frontend. No `package.json` script. No pre-commit hook. No "did CI run codegen?". The watcher owns it.
 
 The generated file is one file, not a `client/` directory with twelve `*.types.ts`. You can grep it, diff it, snapshot it, commit it (or `.gitignore` it — your call).
 
@@ -1141,7 +1139,7 @@ What this gets you:
 
 What it costs you:
 
-- msgspec is less famous than Pydantic. If your team only knows Pydantic, install `tythe[pydantic]` and use `BaseModel` everywhere — it's a first-class plugin, not a shim.
+- msgspec is less famous than Pydantic. If your team only knows Pydantic, install `dyadpy[pydantic]` and use `BaseModel` everywhere — it's a first-class plugin, not a shim.
 
 ## Errors are values
 
@@ -1171,7 +1169,7 @@ What this gets you:
 
 A minor version bump that changes the shape of `client.ts` in a way that breaks a working caller is a breaking change. The output rules — multi-line wrapping past N fields, JSDoc from docstrings, trailing commas — are part of the contract.
 
-What this gets you: your client doesn't break when you `pnpm up @tythe/ts` to a new patch version.
+What this gets you: your client doesn't break when you `pnpm up @dyadpy/ts` to a new patch version.
 
 ## What's not in the box
 
@@ -1179,17 +1177,17 @@ What this gets you: your client doesn't break when you `pnpm up @tythe/ts` to a 
 - **No rate limiting / caching headers / ETag.** Middleware territory. `ctx.set_header` covers the basics.
 - **No LLM-shaped types.** LLM tokens are typed SSE events — use `stream[T]`. Bring your own OpenAI/Anthropic SDK.
 - **No GraphQL.** Different mental model. Strawberry exists.
-- **No bundled frontend template.** Tythe writes a file into your `src/`. Pick your own framework.
+- **No bundled frontend template.** Dyadpy writes a file into your `src/`. Pick your own framework.
 - **No managed hosting.** It's a library. Modal / Fly / Render handle hosting fine.
 
 ## How it compares
 
-|                        | **Tythe**                               | FastAPI + openapi-typescript | tRPC              | Encore.ts          | Connect-RPC              | Reflex              |
+|                        | **Dyadpy**                               | FastAPI + openapi-typescript | tRPC              | Encore.ts          | Connect-RPC              | Reflex              |
 | ---------------------- | --------------------------------------- | ---------------------------- | ----------------- | ------------------ | ------------------------ | ------------------- |
 | Backend lang           | **Python**                              | Python                       | TypeScript        | TS / Go            | Polyglot                 | Python              |
 | Frontend lang          | **Any TS**                              | TS                           | TS only           | TS only            | Polyglot                 | None — JS hidden    |
 | DTO duplication        | **None**                                | Yes                          | None              | None               | Yes (`.proto`)           | N/A                 |
-| Codegen visible to dev | **`tythe dev` only**                    | Yes, explicit                | None              | Implicit (build)   | Yes, `buf gen`           | None                |
+| Codegen visible to dev | **`dyadpy dev` only**                    | Yes, explicit                | None              | Implicit (build)   | Yes, `buf gen`           | None                |
 | Streaming type-safe    | **Yes (typed SSE union)**               | Painful / manual             | Subscriptions     | Yes                | Yes                      | N/A                 |
 | Typed errors → TS      | **Discriminated union**                 | HTTP codes                   | `TRPCError`       | Yes                | Yes (`isAPIError`)       | N/A                 |
 | Validation runtime     | msgspec (Pydantic opt-in)               | Pydantic v2                  | Zod               | Rust + JSON Schema | Protovalidate            | Pydantic            |
@@ -1197,15 +1195,15 @@ What this gets you: your client doesn't break when you `pnpm up @tythe/ts` to a 
 
 ## Polyglot clients
 
-The IR is JSON Schema 2020-12 plus a thin Tythe layer for streams/errors/tasks. The TypeScript renderer is one consumer; Swift and Kotlin ship in core (`tythe swift`, `tythe kotlin`). Anything that reads JSON Schema can read Tythe's IR.
+The IR is JSON Schema 2020-12 plus a thin Dyadpy layer for streams/errors/tasks. The TypeScript renderer is one consumer; Swift and Kotlin ship in core (`dyadpy swift`, `dyadpy kotlin`). Anything that reads JSON Schema can read Dyadpy's IR.
 
 What this gets you: if you ship a mobile app later, the same Python handler also generates a Swift or Kotlin client off the same source of truth.
 
 ## Why this matters for your repo
 
-If your stack is Python + modern TS, Tythe removes the codegen ceremony you don't want to deal with — but it doesn't replace your Python framework, your auth, your ORM, or your frontend framework. It's the wire between two halves of your app, with the types intact.
+If your stack is Python + modern TS, Dyadpy removes the codegen ceremony you don't want to deal with — but it doesn't replace your Python framework, your auth, your ORM, or your frontend framework. It's the typed contract between the two halves of your app — Python on one side, TypeScript on the other, both fully checked.
 
-If your stack is something else, Tythe probably isn't the right tool. tRPC is great for TS monorepos. Connect-RPC is great for polyglot microservices. Reflex is great for internal dashboards. Pick the right tool for the actual constraint.
+If your stack is something else, Dyadpy probably isn't the right tool. tRPC is great for TS monorepos. Connect-RPC is great for polyglot microservices. Reflex is great for internal dashboards. Pick the right tool for the actual constraint.
 
 ## Stability commitments
 
@@ -1218,11 +1216,11 @@ The four pillars of the v1.0 freeze are written down, not just promised:
 
 ## Want to read the code?
 
-- [`packages/tythe/src/tythe/app.py`](../packages/tythe/src/tythe/app.py)
-- [`packages/tythe/src/tythe/ir.py`](../packages/tythe/src/tythe/ir.py)
-- [`packages/tythe/src/tythe/codegen.py`](../packages/tythe/src/tythe/codegen.py)
-- [`packages/tythe/src/tythe/streaming.py`](../packages/tythe/src/tythe/streaming.py)
-- [`packages/tythe-ts/src/`](../packages/tythe-ts/src)
+- [`packages/dyadpy/src/dyadpy/app.py`](../packages/dyadpy/src/dyadpy/app.py)
+- [`packages/dyadpy/src/dyadpy/ir.py`](../packages/dyadpy/src/dyadpy/ir.py)
+- [`packages/dyadpy/src/dyadpy/codegen.py`](../packages/dyadpy/src/dyadpy/codegen.py)
+- [`packages/dyadpy/src/dyadpy/streaming.py`](../packages/dyadpy/src/dyadpy/streaming.py)
+- [`packages/dyadpy-ts/src/`](../packages/dyadpy-ts/src)
 
 Full walk-through in [`docs/architecture.md`](./architecture.md).
 
@@ -1235,10 +1233,10 @@ _Source: [docs/auth.md](./docs/auth.md)_
 
 # Auth recipes
 
-Tythe doesn't ship auth itself — that's intentional. Auth is a deployment
+Dyadpy doesn't ship auth itself — that's intentional. Auth is a deployment
 decision (NextAuth vs Clerk vs Auth0 vs custom JWT vs session cookies),
 and the right answer depends on where your frontend lives and what your
-team already runs. What Tythe ships is the primitive that makes auth
+team already runs. What Dyadpy ships is the primitive that makes auth
 trivial to wire: **a `Depends(...)` resolver that takes a `Request` (or
 header / cookie) and returns whoever you want on `ctx.user`**.
 
@@ -1252,8 +1250,8 @@ import jwt
 from dataclasses import dataclass
 from typing import Annotated
 
-from tythe import App, Depends
-from tythe.params import Header
+from dyadpy import App, Depends
+from dyadpy.params import Header
 
 app = App()
 
@@ -1301,14 +1299,14 @@ def current_user(session: Annotated[str, Cookie()] = "") -> User:
 
 ## 3. NextAuth via JWT
 
-NextAuth signs its session into a cookie; Tythe reads it the same way
+NextAuth signs its session into a cookie; Dyadpy reads it the same way
 you'd read any cookie. The token format is documented at
 [NextAuth's JWT docs](https://next-auth.js.org/configuration/options#jwt).
 
 ```python
 from typing import Annotated
 
-from tythe.params import Cookie
+from dyadpy.params import Cookie
 
 def current_user(
     next_auth_session_token: Annotated[str, Cookie("__Secure-next-auth.session-token")] = "",
@@ -1330,14 +1328,14 @@ def optional_user(authorization: Annotated[str, Header()] = "") -> User | None:
     return _decode(authorization.removeprefix("Bearer "))
 ```
 
-## What Tythe doesn't do
+## What Dyadpy doesn't do
 
 - **Issue tokens.** That's your auth provider's job (Clerk, Auth0, your
   custom issuer).
 - **Rotate keys / hit JWKS.** Use your auth provider's SDK or `pyjwt[jwks]`.
 - **Manage sessions.** Use Lucia, Django, Iron Session, etc.
 
-Tythe's contribution is making the resolver type-safe and reusable across
+Dyadpy's contribution is making the resolver type-safe and reusable across
 every handler. Once `current_user` works, `Depends(current_user)` plugs
 into any route in two characters.
 
@@ -1350,23 +1348,23 @@ _Source: [docs/ssr.md](./docs/ssr.md)_
 
 # Server-side rendering
 
-Tythe's runtime (`@tythe/ts`) and every framework adapter
-(`@tythe/react`, `@tythe/svelte`, `@tythe/solid`) is SSR-safe by
+Dyadpy's runtime (`@dyadpy/ts`) and every framework adapter
+(`@dyadpy/react`, `@dyadpy/svelte`, `@dyadpy/solid`) is SSR-safe by
 construction — the generated `client.ts` uses `globalThis.fetch`, never
 touches `window`/`document`/`localStorage`, and accepts a custom
 `fetch` / `headers` / `baseUrl` for environments that need it.
 
 What you usually want on top of that "doesn't crash under SSR" baseline
 is a way to **prefetch on the server, hydrate on the client** — so the
-first paint isn't a spinner. Tythe ships three small helpers for that,
+first paint isn't a spinner. Dyadpy ships three small helpers for that,
 one per framework, all sharing the same shape.
 
 ## The shape
 
-- **`forwardHeaders(req)`** (from `@tythe/ts`) — pulls cookies, auth,
+- **`forwardHeaders(req)`** (from `@dyadpy/ts`) — pulls cookies, auth,
   CSRF, and tracing headers off the incoming request so your SSR call
   reaches the Python handler authenticated as the user.
-- **Framework helper** — bridges the generic Tythe call into the
+- **Framework helper** — bridges the generic Dyadpy call into the
   framework's prefetch / load primitive (React Query's `prefetchQuery`,
   SvelteKit's `+page.server.ts` load, SolidStart's request event).
 
@@ -1379,12 +1377,12 @@ import {
   HydrationBoundary,
   QueryClient,
 } from "@tanstack/react-query";
-import { prefetchQuery } from "@tythe/react/server";
-import { forwardHeaders } from "@tythe/ts";
+import { prefetchQuery } from "@dyadpy/react/server";
+import { forwardHeaders } from "@dyadpy/ts";
 import { headers } from "next/headers";
 
-import { api } from "@/lib/tythe/client";
-import { UserCard } from "./UserCard"; // client component using `useTythe.useQuery`
+import { api } from "@/lib/dyadpy/client";
+import { UserCard } from "./UserCard"; // client component using `useDyadpy.useQuery`
 
 export default async function Page({
   params,
@@ -1408,7 +1406,7 @@ export default async function Page({
 }
 ```
 
-The client component uses `useTythe.useQuery("getUser", { userId: 1 })`
+The client component uses `useDyadpy.useQuery("getUser", { userId: 1 })`
 with the same query key — React Query finds the dehydrated entry and
 renders instantly without a refetch.
 
@@ -1426,8 +1424,8 @@ await prefetchQueries(qc, api, [
 
 ```ts
 // src/routes/me/+page.server.ts
-import { loadQuery } from "@tythe/svelte/server";
-import { api } from "$lib/tythe/client";
+import { loadQuery } from "@dyadpy/svelte/server";
+import { api } from "$lib/dyadpy/client";
 
 export const load = async (event) => ({
   me: await loadQuery(api, "me", undefined, event),
@@ -1453,9 +1451,9 @@ the result into the rendered HTML — no client refetch.
 // src/routes/me.tsx
 import { createAsync } from "@solidjs/router";
 import { getRequestEvent } from "solid-js/web";
-import { serverQuery } from "@tythe/solid/server";
+import { serverQuery } from "@dyadpy/solid/server";
 
-import { api } from "~/lib/tythe/client";
+import { api } from "~/lib/dyadpy/client";
 
 const fetchMe = async () => {
   "use server";
@@ -1475,10 +1473,10 @@ export default function Me() {
 These claims are pinned by tests (`tests/csr-safety.test.ts` in each
 framework package):
 
-- Importing any `@tythe/*` module under a Node environment with no
+- Importing any `@dyadpy/*` module under a Node environment with no
   `window` / `document` / `localStorage` does not throw.
-- The server entry points (`@tythe/react/server`, `@tythe/svelte/server`,
-  `@tythe/solid/server`) do not transitively reach for DOM globals at
+- The server entry points (`@dyadpy/react/server`, `@dyadpy/svelte/server`,
+  `@dyadpy/solid/server`) do not transitively reach for DOM globals at
   import or at call time.
 - `forwardHeaders` accepts both a bare `Headers` and any
   `{ headers: Headers }` shape, so it composes with Next.js
@@ -1487,7 +1485,7 @@ framework package):
 
 ## What we don't do
 
-- **No magic `useTythe.useSuspenseQuery`.** If you want suspense, use
+- **No magic `useDyadpy.useSuspenseQuery`.** If you want suspense, use
   `useQuery({ suspense: true })` (TanStack) or `createAsync` (Solid)
   on top of the existing hook — the SSR prefetch already populates the
   cache so suspense resolves synchronously.
@@ -1508,9 +1506,9 @@ _Source: [docs/ir-stability.md](./docs/ir-stability.md)_
 
 # IR stability policy
 
-Tythe's intermediate representation (`tythe.ir.AppIR`) is the contract
+Dyadpy's intermediate representation (`dyadpy.ir.AppIR`) is the contract
 between server and client. Anything that reads the IR — the TS codegen,
-the OpenAPI exporter, the polyglot Swift / Kotlin renderers, `tythe diff`,
+the OpenAPI exporter, the polyglot Swift / Kotlin renderers, `dyadpy diff`,
 and any third-party tool — relies on its shape.
 
 **As of v1.0**, the IR's shape is committed. This document spells out
@@ -1520,8 +1518,8 @@ what that commitment means.
 
 - **`AppIR`, `RouteIR`, `ParamIR`, `ErrorIR`** dataclass fields (names,
   meanings, types).
-- **The JSON snapshot format** emitted by `tythe ir <module:attr>`.
-- **The wire format** between Tythe servers and clients: JSON envelope,
+- **The JSON snapshot format** emitted by `dyadpy ir <module:attr>`.
+- **The wire format** between Dyadpy servers and clients: JSON envelope,
   SSE frame shape, snake_case ↔ camelCase translation rule.
 
 ## Compatibility rules
@@ -1574,15 +1572,15 @@ Example: removing a hypothetical `RouteIR.legacy_flag` field.
 - v1.6: still works, still warns.
 - v2.0: removed.
 
-`tythe diff` flags additions / removals at the IR level so accidental
+`dyadpy diff` flags additions / removals at the IR level so accidental
 breakages can't slip through.
 
 ## Compatibility tests
 
 The CI suite includes IR snapshot tests: for each minor release we
-freeze a representative `tythe-ir.json` and assert future versions can
+freeze a representative `dyadpy-ir.json` and assert future versions can
 either consume it directly or produce a backward-compatible diff. The
-files live in `packages/tythe/tests/golden/` (added in v0.2).
+files live in `packages/dyadpy/tests/golden/` (added in v0.2).
 
 
 ---
@@ -1593,9 +1591,9 @@ _Source: [docs/semver.md](./docs/semver.md)_
 
 # Versioning policy
 
-Tythe follows [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
-Each package (`tythe`, `@tythe/ts`, `@tythe/react`, `@tythe/svelte`,
-`@tythe/solid`) versions independently — managed by `release-please` off
+Dyadpy follows [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
+Each package (`dyadpy`, `@dyadpy/ts`, `@dyadpy/react`, `@dyadpy/svelte`,
+`@dyadpy/solid`) versions independently — managed by `release-please` off
 the manifest at `.release-please-manifest.json`.
 
 ## What semver means here
@@ -1636,7 +1634,7 @@ After 1.0:
 
 ## How CI enforces it
 
-- **`tythe diff` in CI** compares the IR snapshot from `main` to the IR
+- **`dyadpy diff` in CI** compares the IR snapshot from `main` to the IR
   snapshot built from each PR. Breaking changes annotate the PR with
   GitHub error annotations and fail the required check.
 - **release-please** classifies commits via Conventional Commits. A
@@ -1649,7 +1647,7 @@ After 1.0:
 
 Once a name appears in `__all__` (Python) or `index.ts` (TS), it is
 public and follows the rules above. Anything imported via a private
-underscore-prefixed module (`tythe._pydantic`, `tythe._idents`, …) is
+underscore-prefixed module (`dyadpy._pydantic`, `dyadpy._idents`, …) is
 not part of the contract and may change in any release.
 
 ## What is _not_ semver-governed
@@ -1657,13 +1655,13 @@ not part of the contract and may change in any release.
 - **Internal implementation details.** Refactors that don't change
   observable behavior or the public surface are not breaking, even if
   they reshape modules.
-- **Performance characteristics.** Tythe aims to be fast, but a
+- **Performance characteristics.** Dyadpy aims to be fast, but a
   measurable regression in p99 latency is a bug to be fixed, not a
   semver event.
 - **Dev dependencies.** Bumping ruff or vitest versions is never a
   breaking change for downstream consumers.
 - **Examples (`examples/*`).** Examples are reference material, not API.
-- **The `tythe-kit` meta-framework** (if and when it ships) versions
+- **The `dyadpy-kit` meta-framework** (if and when it ships) versions
   separately.
 
 
@@ -1675,7 +1673,7 @@ _Source: [docs/lts.md](./docs/lts.md)_
 
 # Long-term support
 
-This page describes the support window for Tythe releases.
+This page describes the support window for Dyadpy releases.
 
 ## Active lines
 
@@ -1718,11 +1716,11 @@ A fix is **not** backported if:
 For pre-1.0 (now):
 
 ```bash
-uv add 'tythe==0.1.0'              # PyPI
-pnpm add '@tythe/ts@0.1.0' \
-        '@tythe/react@0.1.0' \
-        '@tythe/svelte@0.1.0' \
-        '@tythe/solid@0.1.0'       # npm
+uv add 'dyadpy==0.1.0'              # PyPI
+pnpm add '@dyadpy/ts@0.1.0' \
+        '@dyadpy/react@0.1.0' \
+        '@dyadpy/svelte@0.1.0' \
+        '@dyadpy/solid@0.1.0'       # npm
 ```
 
 After 1.0, pin to a minor with `^1.x` (or `>=1.x.y,<2`) and trust

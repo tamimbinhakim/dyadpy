@@ -1,6 +1,6 @@
 # SvelteKit counter example
 
-A minimal end-to-end Tythe demo using `@tythe/svelte`:
+A minimal end-to-end Dyadpy demo using `@dyadpy/svelte`:
 
 - A typed `Counter` shared between Python and Svelte
 - A `@raises(OutOfRange)` mutation that surfaces as a typed `.error` on the store
@@ -13,7 +13,7 @@ In one terminal:
 ```bash
 cd server
 uv sync
-uv run tythe dev app:app --out ../frontend/src/lib/tythe/client.ts
+uv run dyadpy dev app:app --out ../frontend/src/lib/dyadpy/client.ts
 ```
 
 In another:

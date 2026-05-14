@@ -1,0 +1,18 @@
+// `@dyadpy/ts` — the tiny zero-dep runtime the generated `client.ts` imports.
+// Static typing lives in the generated `.d.ts`; this file only does plumbing.
+
+export { createClient } from "./client.js";
+export { parseSSE } from "./sse.js";
+export { DEFAULT_FORWARDED_HEADERS, forwardHeaders } from "./ssr.js";
+export { unwrapResult } from "./types.js";
+export type {
+  CallOptions,
+  ClientConfig,
+  Err,
+  HttpMethod,
+  Ok,
+  ParamDescriptor,
+  ParamLocation,
+  Result,
+  RouteDescriptor,
+} from "./types.js";

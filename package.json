@@ -1,17 +1,17 @@
 {
-  "name": "tythe-monorepo",
+  "name": "dyadpy-monorepo",
   "version": "0.0.0",
   "private": true,
   "description": "A type-safe RPC bridge between Python and TypeScript. The function signature is the contract.",
-  "homepage": "https://github.com/tamimbinhakim/tythe#readme",
+  "homepage": "https://github.com/tamimbinhakim/dyadpy#readme",
   "bugs": {
-    "url": "https://github.com/tamimbinhakim/tythe/issues"
+    "url": "https://github.com/tamimbinhakim/dyadpy/issues"
   },
   "license": "MIT",
   "author": "Tamim Bin Hakim (@tamimbinhakim)",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/tamimbinhakim/tythe.git"
+    "url": "git+https://github.com/tamimbinhakim/dyadpy.git"
   },
   "workspaces": [
     "packages/*",
@@ -23,14 +23,14 @@
     "typecheck": "pnpm -r --filter=./packages/* run typecheck",
     "lint": "pnpm lint:ts && pnpm lint:py",
     "lint:ts": "oxlint .",
-    "lint:py": "uv run --directory packages/tythe ruff check .",
+    "lint:py": "uv run --directory packages/dyadpy ruff check .",
     "format": "pnpm format:ts && pnpm format:py && pnpm format:docs",
     "format:ts": "oxfmt --ignore-path .oxfmtignore .",
-    "format:py": "uv run --directory packages/tythe ruff format .",
+    "format:py": "uv run --directory packages/dyadpy ruff format .",
     "format:docs": "prettier --write \"**/*.{md,json,yaml,yml}\"",
     "format:check": "pnpm format:check:ts && pnpm format:check:py && pnpm format:check:docs",
     "format:check:ts": "oxfmt --ignore-path .oxfmtignore --check .",
-    "format:check:py": "uv run --directory packages/tythe ruff format --check .",
+    "format:check:py": "uv run --directory packages/dyadpy ruff format --check .",
     "format:check:docs": "prettier --check \"**/*.{md,json,yaml,yml}\"",
     "clean": "pnpm -r run clean && rimraf node_modules .turbo",
     "prepare": "husky",
@@ -52,9 +52,9 @@
       "oxlint --fix",
       "oxfmt --ignore-path .oxfmtignore"
     ],
-    "packages/tythe/**/*.py": [
-      "uv run --directory packages/tythe ruff check --fix",
-      "uv run --directory packages/tythe ruff format"
+    "packages/dyadpy/**/*.py": [
+      "uv run --directory packages/dyadpy ruff check --fix",
+      "uv run --directory packages/dyadpy ruff format"
     ],
     "*.{md,json,yaml,yml}": [
       "prettier --write"
