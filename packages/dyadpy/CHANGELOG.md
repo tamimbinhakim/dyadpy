@@ -7,6 +7,13 @@ from [Conventional Commits](https://www.conventionalcommits.org/).
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2](https://github.com/tamimbinhakim/dyadpy/compare/dyadpy-v0.1.1...dyadpy-v0.1.2) (2026-05-19)
+
+
+### Bug Fixes
+
+* **dyadpy:** wrap path/query convert failures as typed ValidationError ([9f83e45](https://github.com/tamimbinhakim/dyadpy/commit/9f83e45e54bf551dbc66bc725a6eeca56f9f51a4))
+
 ## [0.1.1](https://github.com/tamimbinhakim/dyadpy/compare/dyadpy-v0.1.0...dyadpy-v0.1.1) (2026-05-17)
 
 
