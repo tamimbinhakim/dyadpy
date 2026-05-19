@@ -277,7 +277,15 @@ async def _read_value(
                     return spec.default
                 raise _missing(spec)
             inner = _list_item_type(spec.py_type)
-            return [_convert_query_value(r, inner) for r in raws]
+            try:
+                return [_convert_query_value(r, inner) for r in raws]
+            except (msgspec.ValidationError, msgspec.DecodeError) as exc:
+                raise ValidationError(
+                    str(exc),
+                    location=spec.location,
+                    field=spec.alias,
+                    value=raws,
+                ) from exc
         raw = request.query_params.get(spec.alias)
         return _optional_or_convert(raw, spec)
     if spec.location == "header":
@@ -434,11 +442,24 @@ def _optional_or_convert(raw: str | None, spec: ParamSpec) -> Any:
 def _convert_primitive(raw: str | None, spec: ParamSpec) -> Any:
     if raw is None:
         raise _missing(spec)
-    return _convert_query_value(raw, spec.py_type)
+    try:
+        return _convert_query_value(raw, spec.py_type)
+    except (msgspec.ValidationError, msgspec.DecodeError) as exc:
+        raise ValidationError(
+            str(exc),
+            location=spec.location,
+            field=spec.alias,
+            value=raw,
+        ) from exc
 
 
 def _convert_query_value(raw: str, t: Any) -> Any:
-    """Convert a single query/path/header/cookie string into ``t``."""
+    """Convert a single query/path/header/cookie string into ``t``.
+
+    May raise ``msgspec.ValidationError`` or ``msgspec.DecodeError`` — callers
+    are responsible for wrapping these into a typed ``ValidationError`` with
+    spec context so the request fails as a 422 instead of a 500.
+    """
     if t is str or t is Any or t is inspect.Signature.empty:
         return raw
     if t is bool:

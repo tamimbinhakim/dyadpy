@@ -105,3 +105,45 @@ def test_pydantic_field_path() -> None:
     body = r.json()
     assert body["location"] == "body"
     assert "author.email" in body["field"] or "email" in body["field"]
+
+
+def test_bad_uuid_path_param_returns_422_not_500() -> None:
+    """Path-param convert failure must raise typed ValidationError → 422.
+
+    Regression: the fallback ``msgspec.json.decode`` inside
+    ``_convert_query_value`` used to re-raise ``msgspec.ValidationError``
+    uncaught, which escaped to the ASGI layer as a 500.
+    """
+    from uuid import UUID
+
+    app = App()
+
+    @app.get("/items/{id}")
+    async def show(id: UUID) -> dict[str, str]:
+        return {"id": str(id)}
+
+    r = TestClient(app, raise_server_exceptions=False).get("/items/not-a-uuid")
+    assert r.status_code == 422
+    body = r.json()
+    assert body["location"] == "path"
+    assert body["field"] == "id"
+    assert body["value"] == "not-a-uuid"
+
+
+def test_bad_list_query_item_returns_422_not_500() -> None:
+    """List-valued query item convert failure also surfaces as 422."""
+    from typing import Annotated
+
+    from dyadpy.params import Query
+
+    app = App()
+
+    @app.get("/search")
+    async def search(ids: Annotated[list[int], Query()]) -> dict[str, list[int]]:
+        return {"ids": ids}
+
+    r = TestClient(app, raise_server_exceptions=False).get("/search?ids=1&ids=oops")
+    assert r.status_code == 422
+    body = r.json()
+    assert body["location"] == "query"
+    assert body["field"] == "ids"
