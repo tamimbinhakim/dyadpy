@@ -1,6 +1,7 @@
-export { createDyadpyHooks } from "./hooks.js";
+export { createDyadpyHooks, createReactClient } from "./hooks.js";
 export type {
   DyadpyHooks,
+  ReactClient,
   UseDyadpySubscriptionOptions,
   UseDyadpySubscriptionResult,
 } from "./hooks.js";

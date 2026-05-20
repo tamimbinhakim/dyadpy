@@ -34,7 +34,7 @@ export interface UseDyadpySubscriptionResult {
   error: unknown;
 }
 
-export interface DyadpyHooks<TApi> {
+export interface ReactClient<TApi> {
   useQuery: <K extends UnaryKeys<TApi>>(
     method: K,
     args: ArgsOf<TApi[K]>,
@@ -59,7 +59,7 @@ export interface DyadpyHooks<TApi> {
   ) => UseDyadpySubscriptionResult;
 }
 
-export function createDyadpyHooks<TApi extends object>(api: TApi): DyadpyHooks<TApi> {
+export function createReactClient<TApi extends object>(api: TApi): ReactClient<TApi> {
   function useQuery<K extends UnaryKeys<TApi>>(
     method: K,
     args: ArgsOf<TApi[K]>,
@@ -150,6 +150,9 @@ export function createDyadpyHooks<TApi extends object>(api: TApi): DyadpyHooks<T
 
   return { useQuery, useMutation, useSubscription };
 }
+
+export const createDyadpyHooks = createReactClient;
+export type DyadpyHooks<TApi> = ReactClient<TApi>;
 
 function stableKey(value: unknown): string {
   if (value === undefined) return "";

@@ -4,7 +4,7 @@ import { act, render, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 
-import { createDyadpyHooks } from "../src/index.js";
+import { createReactClient } from "../src/index.js";
 
 type Result<T, E> = { ok: true; data: T } | { ok: false; error: E };
 
@@ -45,7 +45,7 @@ function renderHook<T>(hook: () => T, Wrapper: (p: { children: ReactNode }) => R
 describe("useQuery", () => {
   it("unwraps a Result.ok envelope into .data", async () => {
     const getIssue = vi.fn(async () => ({ ok: true as const, data: { id: 1, title: "hi" } }));
-    const { useQuery } = createDyadpyHooks({ getIssue } as unknown as TestApi);
+    const { useQuery } = createReactClient({ getIssue } as unknown as TestApi);
 
     const { result } = renderHook(() => useQuery("getIssue", { issueId: 1 }), makeWrapper());
 
@@ -56,7 +56,7 @@ describe("useQuery", () => {
   it("surfaces Result.error on .error", async () => {
     const err = { kind: "IssueNotFound" as const, issueId: 99 };
     const getIssue = vi.fn(async () => ({ ok: false as const, error: err }));
-    const { useQuery } = createDyadpyHooks({ getIssue } as unknown as TestApi);
+    const { useQuery } = createReactClient({ getIssue } as unknown as TestApi);
 
     const { result } = renderHook(() => useQuery("getIssue", { issueId: 99 }), makeWrapper());
 
@@ -67,7 +67,7 @@ describe("useQuery", () => {
   it("passes non-Result returns through untouched", async () => {
     // `{ ok: true, pong: true }` has no `data`/`error` keys — not an envelope.
     const rawPing = vi.fn(async () => ({ ok: true as const, pong: true as const }));
-    const { useQuery } = createDyadpyHooks({ rawPing } as unknown as TestApi);
+    const { useQuery } = createReactClient({ rawPing } as unknown as TestApi);
 
     const { result } = renderHook(() => useQuery("rawPing", undefined as never), makeWrapper());
 
@@ -77,7 +77,7 @@ describe("useQuery", () => {
 
   it("forwards args and signal to the api method", async () => {
     const getIssue = vi.fn(async () => ({ ok: true as const, data: { id: 7, title: "x" } }));
-    const { useQuery } = createDyadpyHooks({ getIssue } as unknown as TestApi);
+    const { useQuery } = createReactClient({ getIssue } as unknown as TestApi);
 
     const { result } = renderHook(() => useQuery("getIssue", { issueId: 7 }), makeWrapper());
 
@@ -92,7 +92,7 @@ describe("useQuery", () => {
 describe("useMutation", () => {
   it("unwraps Result.ok on success", async () => {
     const createIssue = vi.fn(async () => ({ ok: true as const, data: { id: 5, title: "new" } }));
-    const { useMutation } = createDyadpyHooks({ createIssue } as unknown as TestApi);
+    const { useMutation } = createReactClient({ createIssue } as unknown as TestApi);
 
     const { result } = renderHook(() => useMutation("createIssue"), makeWrapper());
 
@@ -105,7 +105,7 @@ describe("useMutation", () => {
   it("rejects with Result.error and lands it on .error", async () => {
     const err = { kind: "IssueNotFound" as const, issueId: 1 };
     const createIssue = vi.fn(async () => ({ ok: false as const, error: err }));
-    const { useMutation } = createDyadpyHooks({ createIssue } as unknown as TestApi);
+    const { useMutation } = createReactClient({ createIssue } as unknown as TestApi);
 
     const { result } = renderHook(() => useMutation("createIssue"), makeWrapper());
 
@@ -127,7 +127,7 @@ async function* immediateThrow(): AsyncIterable<unknown> {
 
 describe("useSubscription", () => {
   it("delivers events and transitions to closed when the stream ends", async () => {
-    const { useSubscription } = createDyadpyHooks({
+    const { useSubscription } = createReactClient({
       events: () => twoTicks(),
     } as unknown as TestApi);
 
@@ -153,7 +153,7 @@ describe("useSubscription", () => {
       });
       await new Promise((resolve) => opts.signal?.addEventListener("abort", resolve));
     }
-    const { useSubscription } = createDyadpyHooks({ events } as unknown as TestApi);
+    const { useSubscription } = createReactClient({ events } as unknown as TestApi);
 
     const { unmount, result } = renderHook(
       () => useSubscription("events", { topic: "y" }, { onEvent: () => {} }),
@@ -167,7 +167,7 @@ describe("useSubscription", () => {
 
   it("stays idle when enabled is false", () => {
     const events = vi.fn();
-    const { useSubscription } = createDyadpyHooks({ events } as unknown as TestApi);
+    const { useSubscription } = createReactClient({ events } as unknown as TestApi);
 
     const { result } = renderHook(
       () => useSubscription("events", { topic: "z" }, { enabled: false, onEvent: () => {} }),
@@ -179,7 +179,7 @@ describe("useSubscription", () => {
   });
 
   it("transitions to error and surfaces the thrown value", async () => {
-    const { useSubscription } = createDyadpyHooks({ events: immediateThrow } as unknown as TestApi);
+    const { useSubscription } = createReactClient({ events: immediateThrow } as unknown as TestApi);
 
     const { result } = renderHook(
       () => useSubscription("events", { topic: "q" }, { onEvent: () => {} }),
