@@ -43,11 +43,13 @@ export type StreamItemOf<F> = F extends AnyFn
   : never;
 
 export type QueryKeyOf<TApi, K extends UnaryKeys<TApi>> =
-  ArgsOf<TApi[K]> extends void ? readonly [K] : readonly [K, ArgsOf<TApi[K]>];
+  undefined extends ArgsOf<TApi[K]>
+    ? readonly [K] | readonly [K, Exclude<ArgsOf<TApi[K]>, undefined>]
+    : readonly [K, ArgsOf<TApi[K]>];
 
 export type MaybeArgs<TApi, K extends UnaryKeys<TApi>, TOptions> =
-  ArgsOf<TApi[K]> extends void
-    ? readonly [args?: undefined, options?: TOptions]
+  undefined extends ArgsOf<TApi[K]>
+    ? readonly [args?: Exclude<ArgsOf<TApi[K]>, undefined>, options?: TOptions]
     : readonly [args: ArgsOf<TApi[K]>, options?: TOptions];
 
 export type SubscriptionStatus = "idle" | "connecting" | "open" | "closed" | "error";
