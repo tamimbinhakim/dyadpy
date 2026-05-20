@@ -7,8 +7,6 @@
 // type, and they fall through to the raw payload for routes that don't carry
 // a `Result<…>` envelope (i.e. routes without `@raises(...)`).
 
-import type { Result } from "@dyadpy/ts";
-
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- generic over arbitrary callables
 type AnyFn = (...args: any[]) => any;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- match every function shape
@@ -41,10 +39,8 @@ type IsCallOptionsLike<T> = [T] extends [undefined]
 
 export type ArgsOf<F> = IsCallOptionsLike<FirstArg<F>> extends true ? void : FirstArg<F>;
 
-// Two-stage to force distribution over union members. See the matching note in
-// `@dyadpy/ts/src/types.ts` for the same pattern on `Ok` / `Err`.
-type DataOfResolved<X> = X extends Result<infer T, unknown> ? T : X;
-type ErrorOfResolved<X> = X extends Result<unknown, infer E> ? E : Error;
+type DataOfResolved<X> = Extract<X, { ok: true }> extends { data: infer T } ? T : X;
+type ErrorOfResolved<X> = Extract<X, { ok: false }> extends { error: infer E } ? E : Error;
 
 export type DataOf<F> = F extends AnyFn ? DataOfResolved<Awaited<ReturnType<F>>> : never;
 export type ErrorOf<F> = F extends AnyFn ? ErrorOfResolved<Awaited<ReturnType<F>>> : Error;

@@ -460,7 +460,7 @@ def _render_type(
         if not props and additional is not None and additional is not False:
             return f"Record<string, {_render_type(additional, name_map, indent=indent)}>"
         if not props:
-            return "Record<string, never>"
+            return "Record<string, unknown>"
         return _render_object(props, required, name_map, indent=indent)
 
     return "unknown"

@@ -1,9 +1,17 @@
-import { useMutation as useRQMutation, useQuery as useRQQuery } from "@tanstack/react-query";
+import {
+  mutationOptions as rqMutationOptions,
+  queryOptions as rqQueryOptions,
+  useMutation as useRQMutation,
+  useQuery as useRQQuery,
+  useSuspenseQuery as useRQSuspenseQuery,
+} from "@tanstack/react-query";
 import type {
   UseMutationOptions,
   UseMutationResult,
   UseQueryOptions,
   UseQueryResult,
+  UseSuspenseQueryOptions,
+  UseSuspenseQueryResult,
 } from "@tanstack/react-query";
 import { unwrapResult } from "@dyadpy/ts";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -20,6 +28,18 @@ import type {
 
 type Unary = (args?: unknown, opts?: { signal?: AbortSignal }) => Promise<unknown>;
 type Stream = (args?: unknown, opts?: { signal?: AbortSignal }) => AsyncIterable<unknown>;
+type QueryHookOptions<TApi, K extends UnaryKeys<TApi>> = Omit<
+  UseQueryOptions<DataOf<TApi[K]>, ErrorOf<TApi[K]>, DataOf<TApi[K]>, readonly unknown[]>,
+  "queryKey" | "queryFn"
+> & { queryKey?: readonly unknown[] };
+type SuspenseQueryHookOptions<TApi, K extends UnaryKeys<TApi>> = Omit<
+  UseSuspenseQueryOptions<DataOf<TApi[K]>, ErrorOf<TApi[K]>, DataOf<TApi[K]>, readonly unknown[]>,
+  "queryKey" | "queryFn"
+> & { queryKey?: readonly unknown[] };
+type QueryHookArgs<TApi, K extends UnaryKeys<TApi>, TOptions> =
+  ArgsOf<TApi[K]> extends void
+    ? [args?: ArgsOf<TApi[K]>, options?: TOptions]
+    : [args: ArgsOf<TApi[K]>, options?: TOptions];
 
 export interface UseDyadpySubscriptionOptions<TEvent> {
   enabled?: boolean;
@@ -35,14 +55,38 @@ export interface UseDyadpySubscriptionResult {
 }
 
 export interface ReactClient<TApi> {
+  queryOptions: <K extends UnaryKeys<TApi>>(
+    method: K,
+    ...args: QueryHookArgs<TApi, K, QueryHookOptions<TApi, K>>
+  ) => UseQueryOptions<DataOf<TApi[K]>, ErrorOf<TApi[K]>, DataOf<TApi[K]>, readonly unknown[]>;
+
   useQuery: <K extends UnaryKeys<TApi>>(
     method: K,
-    args: ArgsOf<TApi[K]>,
-    options?: Omit<
-      UseQueryOptions<DataOf<TApi[K]>, ErrorOf<TApi[K]>, DataOf<TApi[K]>, readonly unknown[]>,
-      "queryKey" | "queryFn"
-    > & { queryKey?: readonly unknown[] },
+    ...args: QueryHookArgs<TApi, K, QueryHookOptions<TApi, K>>
   ) => UseQueryResult<DataOf<TApi[K]>, ErrorOf<TApi[K]>>;
+
+  suspenseQueryOptions: <K extends UnaryKeys<TApi>>(
+    method: K,
+    ...args: QueryHookArgs<TApi, K, SuspenseQueryHookOptions<TApi, K>>
+  ) => UseSuspenseQueryOptions<
+    DataOf<TApi[K]>,
+    ErrorOf<TApi[K]>,
+    DataOf<TApi[K]>,
+    readonly unknown[]
+  >;
+
+  useSuspenseQuery: <K extends UnaryKeys<TApi>>(
+    method: K,
+    ...args: QueryHookArgs<TApi, K, SuspenseQueryHookOptions<TApi, K>>
+  ) => UseSuspenseQueryResult<DataOf<TApi[K]>, ErrorOf<TApi[K]>>;
+
+  mutationOptions: <K extends UnaryKeys<TApi>>(
+    method: K,
+    options?: Omit<
+      UseMutationOptions<DataOf<TApi[K]>, ErrorOf<TApi[K]>, ArgsOf<TApi[K]>>,
+      "mutationFn"
+    >,
+  ) => UseMutationOptions<DataOf<TApi[K]>, ErrorOf<TApi[K]>, ArgsOf<TApi[K]>>;
 
   useMutation: <K extends UnaryKeys<TApi>>(
     method: K,
@@ -60,20 +104,57 @@ export interface ReactClient<TApi> {
 }
 
 export function createReactClient<TApi extends object>(api: TApi): ReactClient<TApi> {
-  function useQuery<K extends UnaryKeys<TApi>>(
+  function queryOptions<K extends UnaryKeys<TApi>>(
     method: K,
-    args: ArgsOf<TApi[K]>,
-    options?: Omit<
-      UseQueryOptions<DataOf<TApi[K]>, ErrorOf<TApi[K]>, DataOf<TApi[K]>, readonly unknown[]>,
-      "queryKey" | "queryFn"
-    > & { queryKey?: readonly unknown[] },
+    args?: ArgsOf<TApi[K]>,
+    options?: QueryHookOptions<TApi, K>,
   ) {
-    return useRQQuery<DataOf<TApi[K]>, ErrorOf<TApi[K]>, DataOf<TApi[K]>, readonly unknown[]>({
+    return rqQueryOptions<DataOf<TApi[K]>, ErrorOf<TApi[K]>, DataOf<TApi[K]>, readonly unknown[]>({
       queryKey: [method, args],
       ...options,
       queryFn: async ({ signal }) => {
         const fn = api[method] as unknown as Unary;
         return unwrapResult(await fn(args as unknown, { signal })) as DataOf<TApi[K]>;
+      },
+    });
+  }
+
+  function useQuery<K extends UnaryKeys<TApi>>(
+    method: K,
+    args?: ArgsOf<TApi[K]>,
+    options?: QueryHookOptions<TApi, K>,
+  ) {
+    return useRQQuery(queryOptions(method, args, options));
+  }
+
+  function suspenseQueryOptions<K extends UnaryKeys<TApi>>(
+    method: K,
+    args?: ArgsOf<TApi[K]>,
+    options?: SuspenseQueryHookOptions<TApi, K>,
+  ) {
+    return queryOptions(method, args, options);
+  }
+
+  function useSuspenseQuery<K extends UnaryKeys<TApi>>(
+    method: K,
+    args?: ArgsOf<TApi[K]>,
+    options?: SuspenseQueryHookOptions<TApi, K>,
+  ) {
+    return useRQSuspenseQuery(suspenseQueryOptions(method, args, options));
+  }
+
+  function mutationOptions<K extends UnaryKeys<TApi>>(
+    method: K,
+    options?: Omit<
+      UseMutationOptions<DataOf<TApi[K]>, ErrorOf<TApi[K]>, ArgsOf<TApi[K]>>,
+      "mutationFn"
+    >,
+  ) {
+    return rqMutationOptions<DataOf<TApi[K]>, ErrorOf<TApi[K]>, ArgsOf<TApi[K]>>({
+      ...options,
+      mutationFn: async (vars) => {
+        const fn = api[method] as unknown as Unary;
+        return unwrapResult(await fn(vars as unknown)) as DataOf<TApi[K]>;
       },
     });
   }
@@ -85,13 +166,7 @@ export function createReactClient<TApi extends object>(api: TApi): ReactClient<T
       "mutationFn"
     >,
   ) {
-    return useRQMutation<DataOf<TApi[K]>, ErrorOf<TApi[K]>, ArgsOf<TApi[K]>>({
-      ...options,
-      mutationFn: async (vars) => {
-        const fn = api[method] as unknown as Unary;
-        return unwrapResult(await fn(vars as unknown)) as DataOf<TApi[K]>;
-      },
-    });
+    return useRQMutation(mutationOptions(method, options));
   }
 
   function useSubscription<K extends StreamKeys<TApi>>(
@@ -148,7 +223,15 @@ export function createReactClient<TApi extends object>(api: TApi): ReactClient<T
     return { status, error: errorState };
   }
 
-  return { useQuery, useMutation, useSubscription };
+  return {
+    queryOptions,
+    useQuery,
+    suspenseQueryOptions,
+    useSuspenseQuery,
+    mutationOptions,
+    useMutation,
+    useSubscription,
+  };
 }
 
 export const createDyadpyHooks = createReactClient;

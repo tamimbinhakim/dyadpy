@@ -2,9 +2,10 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, render, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, expectTypeOf, it, vi } from "vitest";
 
 import { createReactClient } from "../src/index.js";
+import type { DataOf } from "../src/index.js";
 
 type Result<T, E> = { ok: true; data: T } | { ok: false; error: E };
 
@@ -43,6 +44,16 @@ function renderHook<T>(hook: () => T, Wrapper: (p: { children: ReactNode }) => R
 }
 
 describe("useQuery", () => {
+  it("builds reusable query options", async () => {
+    const getIssue = vi.fn(async () => ({ ok: true as const, data: { id: 2, title: "opts" } }));
+    const { queryOptions } = createReactClient({ getIssue } as unknown as TestApi);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    await client.prefetchQuery(queryOptions("getIssue", { issueId: 2 }));
+
+    expect(client.getQueryData(["getIssue", { issueId: 2 }])).toEqual({ id: 2, title: "opts" });
+  });
+
   it("unwraps a Result.ok envelope into .data", async () => {
     const getIssue = vi.fn(async () => ({ ok: true as const, data: { id: 1, title: "hi" } }));
     const { useQuery } = createReactClient({ getIssue } as unknown as TestApi);
@@ -90,6 +101,10 @@ describe("useQuery", () => {
 });
 
 describe("useMutation", () => {
+  it("infers mutation data from the ok branch of a Result union", () => {
+    expectTypeOf<DataOf<TestApi["createIssue"]>>().toEqualTypeOf<Issue>();
+  });
+
   it("unwraps Result.ok on success", async () => {
     const createIssue = vi.fn(async () => ({ ok: true as const, data: { id: 5, title: "new" } }));
     const { useMutation } = createReactClient({ createIssue } as unknown as TestApi);

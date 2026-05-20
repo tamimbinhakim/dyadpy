@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 import msgspec
 import pytest
@@ -379,6 +379,21 @@ def test_msgspec_auto_title_not_emitted_as_jsdoc() -> None:
     out = render(build_ir(app))
     # The redundant `/** Plain */` JSDoc above `export type Plain` must NOT appear.
     assert "/** Plain */\nexport type Plain" not in out
+
+
+def test_unconstrained_object_type_is_not_never_record() -> None:
+    class Payload(msgspec.Struct):
+        metadata: dict[str, Any]
+
+    app = App()
+
+    @app.post("/payload")
+    async def payload(data: Payload) -> Payload:
+        return data
+
+    out = render(build_ir(app))
+    assert "metadata: Record<string, unknown>" in out
+    assert "Record<string, never>" not in out
 
 
 def test_struct_docstring_not_emitted_as_jsdoc() -> None:
