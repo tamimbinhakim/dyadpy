@@ -334,8 +334,7 @@ def test_small_struct_stays_inline() -> None:
     assert "export type Tiny = { a: number; b: string };" in out
 
 
-def test_handler_docstring_emitted_as_jsdoc() -> None:
-    """Handler ``__doc__`` surfaces as JSDoc above the route method signature."""
+def test_handler_docstring_not_emitted_as_jsdoc() -> None:
     app = App()
 
     @app.get("/ping")
@@ -344,11 +343,11 @@ def test_handler_docstring_emitted_as_jsdoc() -> None:
         return "pong"
 
     out = render(build_ir(app))
-    assert "/** Health probe — returns the literal string ``pong``. */" in out
+    assert "Health probe" not in out
+    assert "ping(" in out
 
 
-def test_multi_line_docstring_becomes_block_jsdoc() -> None:
-    """Docstrings with multiple lines render as ``/**\\n * ... \\n */`` blocks."""
+def test_multi_line_docstring_not_emitted_as_jsdoc() -> None:
     app = App()
 
     @app.get("/x")
@@ -360,8 +359,9 @@ def test_multi_line_docstring_becomes_block_jsdoc() -> None:
         return 1
 
     out = render(build_ir(app))
-    assert "/**\n   * First line." in out
-    assert "* Second paragraph with extra detail." in out
+    assert "First line." not in out
+    assert "Second paragraph with extra detail." not in out
+    assert "x(" in out
 
 
 def test_msgspec_auto_title_not_emitted_as_jsdoc() -> None:
@@ -381,9 +381,7 @@ def test_msgspec_auto_title_not_emitted_as_jsdoc() -> None:
     assert "/** Plain */\nexport type Plain" not in out
 
 
-def test_struct_docstring_emitted_as_jsdoc() -> None:
-    """A Struct docstring surfaces as JSDoc above its TS type declaration."""
-
+def test_struct_docstring_not_emitted_as_jsdoc() -> None:
     class Thing(msgspec.Struct):
         """A thing that lives in the system."""
 
@@ -396,7 +394,8 @@ def test_struct_docstring_emitted_as_jsdoc() -> None:
         return data
 
     out = render(build_ir(app))
-    assert "/** A thing that lives in the system. */\nexport type Thing" in out
+    assert "A thing that lives in the system." not in out
+    assert "export type Thing" in out
 
 
 def test_route_descriptor_wraps_when_long() -> None:
