@@ -8,6 +8,13 @@ this file. Managed automatically by
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1-alpha.0](https://github.com/tamimbinhakim/dyadpy/compare/dyadpy-ts-v0.1.0-alpha.0...dyadpy-ts-v0.1.1-alpha.0) (2026-05-20)
+
+
+### Features
+
+* **dyadpy:** support SSR client factories ([bab8eb6](https://github.com/tamimbinhakim/dyadpy/commit/bab8eb63e1bc4d24fe12a7c490e741c1599f2e50))
+
 ## [Unreleased]
 
 ### Added
