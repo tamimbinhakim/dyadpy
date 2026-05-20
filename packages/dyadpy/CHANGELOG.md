@@ -7,6 +7,13 @@ from [Conventional Commits](https://www.conventionalcommits.org/).
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.7](https://github.com/tamimbinhakim/dyadpy/compare/dyadpy-v0.1.6...dyadpy-v0.1.7) (2026-05-20)
+
+
+### Bug Fixes
+
+* **dyadpy:** trim generated client comments ([ef4136a](https://github.com/tamimbinhakim/dyadpy/commit/ef4136a125b16cd10045a44fdd60d53dfc24d567))
+
 ## [0.1.6](https://github.com/tamimbinhakim/dyadpy/compare/dyadpy-v0.1.5...dyadpy-v0.1.6) (2026-05-20)
 
 
