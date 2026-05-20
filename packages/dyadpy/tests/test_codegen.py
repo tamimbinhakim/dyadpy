@@ -174,6 +174,9 @@ def test_render_emits_configurable_api_factory_for_ssr() -> None:
         return {"id": user_id}
 
     out = render(build_ir(app))
+    assert out.startswith(
+        "// @ts-nocheck\n/* eslint-disable */\n// biome-ignore-all lint: generated dyadpy client\n"
+    )
     assert 'export type ApiClientOptions = Omit<ClientConfig, "routes">' in out
     assert "export interface ApiRoutes" in out
     assert "export function createApi(options: ApiClientOptions = {}): ApiRoutes" in out
