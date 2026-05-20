@@ -1,25 +1,26 @@
 import {
-  mutationOptions as rqMutationOptions,
-  queryOptions as rqQueryOptions,
-  useMutation as useRQMutation,
-  useQuery as useRQQuery,
-  useSuspenseQuery as useRQSuspenseQuery,
+  mutationOptions,
+  queryOptions,
+  useMutation,
+  useQuery,
+  useSuspenseQuery,
 } from "@tanstack/react-query";
 import type {
   UseMutationOptions,
   UseMutationResult,
   UseQueryOptions,
   UseQueryResult,
-  UseSuspenseQueryOptions,
   UseSuspenseQueryResult,
+  UseSuspenseQueryOptions,
 } from "@tanstack/react-query";
-import { unwrapResult } from "@dyadpy/ts";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import type {
   ArgsOf,
   DataOf,
   ErrorOf,
+  MaybeArgs,
+  QueryKeyOf,
   StreamItemOf,
   StreamKeys,
   SubscriptionStatus,
@@ -28,18 +29,14 @@ import type {
 
 type Unary = (args?: unknown, opts?: { signal?: AbortSignal }) => Promise<unknown>;
 type Stream = (args?: unknown, opts?: { signal?: AbortSignal }) => AsyncIterable<unknown>;
-type QueryHookOptions<TApi, K extends UnaryKeys<TApi>> = Omit<
-  UseQueryOptions<DataOf<TApi[K]>, ErrorOf<TApi[K]>, DataOf<TApi[K]>, readonly unknown[]>,
+type QueryHookOptions<TApi, K extends UnaryKeys<TApi>, TSelected = DataOf<TApi[K]>> = Omit<
+  UseQueryOptions<DataOf<TApi[K]>, ErrorOf<TApi[K]>, TSelected, QueryKeyOf<TApi, K>>,
   "queryKey" | "queryFn"
-> & { queryKey?: readonly unknown[] };
-type SuspenseQueryHookOptions<TApi, K extends UnaryKeys<TApi>> = Omit<
-  UseSuspenseQueryOptions<DataOf<TApi[K]>, ErrorOf<TApi[K]>, DataOf<TApi[K]>, readonly unknown[]>,
+> & { queryKey?: QueryKeyOf<TApi, K> };
+type SuspenseQueryHookOptions<TApi, K extends UnaryKeys<TApi>, TSelected = DataOf<TApi[K]>> = Omit<
+  UseSuspenseQueryOptions<DataOf<TApi[K]>, ErrorOf<TApi[K]>, TSelected, QueryKeyOf<TApi, K>>,
   "queryKey" | "queryFn"
-> & { queryKey?: readonly unknown[] };
-type QueryHookArgs<TApi, K extends UnaryKeys<TApi>, TOptions> =
-  ArgsOf<TApi[K]> extends void
-    ? [args?: ArgsOf<TApi[K]>, options?: TOptions]
-    : [args: ArgsOf<TApi[K]>, options?: TOptions];
+> & { queryKey?: QueryKeyOf<TApi, K> };
 
 export interface UseDyadpySubscriptionOptions<TEvent> {
   enabled?: boolean;
@@ -55,30 +52,27 @@ export interface UseDyadpySubscriptionResult {
 }
 
 export interface ReactClient<TApi> {
-  queryOptions: <K extends UnaryKeys<TApi>>(
-    method: K,
-    ...args: QueryHookArgs<TApi, K, QueryHookOptions<TApi, K>>
-  ) => UseQueryOptions<DataOf<TApi[K]>, ErrorOf<TApi[K]>, DataOf<TApi[K]>, readonly unknown[]>;
+  queryKey: <K extends UnaryKeys<TApi>>(method: K, args?: ArgsOf<TApi[K]>) => QueryKeyOf<TApi, K>;
 
-  useQuery: <K extends UnaryKeys<TApi>>(
+  queryOptions: <K extends UnaryKeys<TApi>, TSelected = DataOf<TApi[K]>>(
     method: K,
-    ...args: QueryHookArgs<TApi, K, QueryHookOptions<TApi, K>>
-  ) => UseQueryResult<DataOf<TApi[K]>, ErrorOf<TApi[K]>>;
+    ...args: MaybeArgs<TApi, K, QueryHookOptions<TApi, K, TSelected>>
+  ) => UseQueryOptions<DataOf<TApi[K]>, ErrorOf<TApi[K]>, TSelected, QueryKeyOf<TApi, K>>;
 
-  suspenseQueryOptions: <K extends UnaryKeys<TApi>>(
+  useQuery: <K extends UnaryKeys<TApi>, TSelected = DataOf<TApi[K]>>(
     method: K,
-    ...args: QueryHookArgs<TApi, K, SuspenseQueryHookOptions<TApi, K>>
-  ) => UseSuspenseQueryOptions<
-    DataOf<TApi[K]>,
-    ErrorOf<TApi[K]>,
-    DataOf<TApi[K]>,
-    readonly unknown[]
-  >;
+    ...args: MaybeArgs<TApi, K, QueryHookOptions<TApi, K, TSelected>>
+  ) => UseQueryResult<TSelected, ErrorOf<TApi[K]>>;
 
-  useSuspenseQuery: <K extends UnaryKeys<TApi>>(
+  suspenseQueryOptions: <K extends UnaryKeys<TApi>, TSelected = DataOf<TApi[K]>>(
     method: K,
-    ...args: QueryHookArgs<TApi, K, SuspenseQueryHookOptions<TApi, K>>
-  ) => UseSuspenseQueryResult<DataOf<TApi[K]>, ErrorOf<TApi[K]>>;
+    ...args: MaybeArgs<TApi, K, SuspenseQueryHookOptions<TApi, K, TSelected>>
+  ) => UseSuspenseQueryOptions<DataOf<TApi[K]>, ErrorOf<TApi[K]>, TSelected, QueryKeyOf<TApi, K>>;
+
+  useSuspenseQuery: <K extends UnaryKeys<TApi>, TSelected = DataOf<TApi[K]>>(
+    method: K,
+    ...args: MaybeArgs<TApi, K, SuspenseQueryHookOptions<TApi, K, TSelected>>
+  ) => UseSuspenseQueryResult<TSelected, ErrorOf<TApi[K]>>;
 
   mutationOptions: <K extends UnaryKeys<TApi>>(
     method: K,
@@ -104,69 +98,84 @@ export interface ReactClient<TApi> {
 }
 
 export function createReactClient<TApi extends object>(api: TApi): ReactClient<TApi> {
-  function queryOptions<K extends UnaryKeys<TApi>>(
+  function queryKey<K extends UnaryKeys<TApi>>(
     method: K,
     args?: ArgsOf<TApi[K]>,
-    options?: QueryHookOptions<TApi, K>,
+  ): QueryKeyOf<TApi, K> {
+    return (args === undefined ? [method] : [method, args]) as unknown as QueryKeyOf<TApi, K>;
+  }
+
+  function getQueryOptions<K extends UnaryKeys<TApi>, TSelected = DataOf<TApi[K]>>(
+    method: K,
+    ...hookArgs: MaybeArgs<TApi, K, QueryHookOptions<TApi, K, TSelected>>
   ) {
-    return rqQueryOptions<DataOf<TApi[K]>, ErrorOf<TApi[K]>, DataOf<TApi[K]>, readonly unknown[]>({
-      queryKey: [method, args],
+    const [args, options] = splitArgs(hookArgs);
+    return queryOptions<DataOf<TApi[K]>, ErrorOf<TApi[K]>, TSelected, QueryKeyOf<TApi, K>>({
+      queryKey: options?.queryKey ?? queryKey(method, args as ArgsOf<TApi[K]>),
       ...options,
       queryFn: async ({ signal }) => {
         const fn = api[method] as unknown as Unary;
-        return unwrapResult(await fn(args as unknown, { signal })) as DataOf<TApi[K]>;
+        return dataOrThrow(await fn(args as unknown, { signal })) as DataOf<TApi[K]>;
       },
     });
   }
 
-  function useQuery<K extends UnaryKeys<TApi>>(
+  function getUseQuery<K extends UnaryKeys<TApi>, TSelected = DataOf<TApi[K]>>(
     method: K,
-    args?: ArgsOf<TApi[K]>,
-    options?: QueryHookOptions<TApi, K>,
+    ...args: MaybeArgs<TApi, K, QueryHookOptions<TApi, K, TSelected>>
   ) {
-    return useRQQuery(queryOptions(method, args, options));
+    return useQuery(getQueryOptions<K, TSelected>(method, ...args)) as UseQueryResult<
+      TSelected,
+      ErrorOf<TApi[K]>
+    >;
   }
 
-  function suspenseQueryOptions<K extends UnaryKeys<TApi>>(
+  function getSuspenseQueryOptions<K extends UnaryKeys<TApi>, TSelected = DataOf<TApi[K]>>(
     method: K,
-    args?: ArgsOf<TApi[K]>,
-    options?: SuspenseQueryHookOptions<TApi, K>,
+    ...args: MaybeArgs<TApi, K, SuspenseQueryHookOptions<TApi, K, TSelected>>
   ) {
-    return queryOptions(method, args, options);
+    return getQueryOptions<K, TSelected>(method, ...args) as UseSuspenseQueryOptions<
+      DataOf<TApi[K]>,
+      ErrorOf<TApi[K]>,
+      TSelected,
+      QueryKeyOf<TApi, K>
+    >;
   }
 
-  function useSuspenseQuery<K extends UnaryKeys<TApi>>(
+  function getUseSuspenseQuery<K extends UnaryKeys<TApi>, TSelected = DataOf<TApi[K]>>(
     method: K,
-    args?: ArgsOf<TApi[K]>,
-    options?: SuspenseQueryHookOptions<TApi, K>,
+    ...args: MaybeArgs<TApi, K, SuspenseQueryHookOptions<TApi, K, TSelected>>
   ) {
-    return useRQSuspenseQuery(suspenseQueryOptions(method, args, options));
+    return useSuspenseQuery(getSuspenseQueryOptions(method, ...args)) as UseSuspenseQueryResult<
+      TSelected,
+      ErrorOf<TApi[K]>
+    >;
   }
 
-  function mutationOptions<K extends UnaryKeys<TApi>>(
+  function getMutationOptions<K extends UnaryKeys<TApi>>(
     method: K,
     options?: Omit<
       UseMutationOptions<DataOf<TApi[K]>, ErrorOf<TApi[K]>, ArgsOf<TApi[K]>>,
       "mutationFn"
     >,
   ) {
-    return rqMutationOptions<DataOf<TApi[K]>, ErrorOf<TApi[K]>, ArgsOf<TApi[K]>>({
+    return mutationOptions<DataOf<TApi[K]>, ErrorOf<TApi[K]>, ArgsOf<TApi[K]>>({
       ...options,
       mutationFn: async (vars) => {
         const fn = api[method] as unknown as Unary;
-        return unwrapResult(await fn(vars as unknown)) as DataOf<TApi[K]>;
+        return dataOrThrow(await fn(vars as unknown)) as DataOf<TApi[K]>;
       },
     });
   }
 
-  function useMutation<K extends UnaryKeys<TApi>>(
+  function getUseMutation<K extends UnaryKeys<TApi>>(
     method: K,
     options?: Omit<
       UseMutationOptions<DataOf<TApi[K]>, ErrorOf<TApi[K]>, ArgsOf<TApi[K]>>,
       "mutationFn"
     >,
   ) {
-    return useRQMutation(mutationOptions(method, options));
+    return useMutation(getMutationOptions(method, options));
   }
 
   function useSubscription<K extends StreamKeys<TApi>>(
@@ -178,12 +187,8 @@ export function createReactClient<TApi extends object>(api: TApi): ReactClient<T
     const [status, setStatus] = useState<SubscriptionStatus>("idle");
     const [errorState, setError] = useState<unknown>(null);
 
-    // Latest callbacks held in a ref so an inline `onEvent={(e) => ...}` doesn't
-    // tear down the stream every render.
     const cb = useRef({ onEvent, onOpen, onClose, onError });
     cb.current = { onEvent, onOpen, onClose, onError };
-
-    // Stable key over structurally-equal args.
     const argsKey = useMemo(() => stableKey(args), [args]);
 
     useEffect(() => {
@@ -224,12 +229,13 @@ export function createReactClient<TApi extends object>(api: TApi): ReactClient<T
   }
 
   return {
-    queryOptions,
-    useQuery,
-    suspenseQueryOptions,
-    useSuspenseQuery,
-    mutationOptions,
-    useMutation,
+    queryKey,
+    queryOptions: getQueryOptions,
+    useQuery: getUseQuery,
+    suspenseQueryOptions: getSuspenseQueryOptions,
+    useSuspenseQuery: getUseSuspenseQuery,
+    mutationOptions: getMutationOptions,
+    useMutation: getUseMutation,
     useSubscription,
   };
 }
@@ -237,18 +243,43 @@ export function createReactClient<TApi extends object>(api: TApi): ReactClient<T
 export const createDyadpyHooks = createReactClient;
 export type DyadpyHooks<TApi> = ReactClient<TApi>;
 
+function splitArgs<TArgs, TOptions>(
+  args: readonly [args?: TArgs | undefined, options?: TOptions],
+): [TArgs | undefined, TOptions | undefined] {
+  return [args[0] as TArgs | undefined, args[1]];
+}
+
 function stableKey(value: unknown): string {
   if (value === undefined) return "";
   return JSON.stringify(value, (_k, v: unknown) => {
     if (v && typeof v === "object" && !Array.isArray(v)) {
       const out: Record<string, unknown> = {};
-      // Fresh array from Object.keys — sorting in place is fine.
-      // eslint-disable-next-line unicorn/no-array-sort
-      for (const k of Object.keys(v as Record<string, unknown>).sort()) {
+      for (const k of sortedKeys(v as Record<string, unknown>)) {
         out[k] = (v as Record<string, unknown>)[k];
       }
       return out;
     }
     return v;
   });
+}
+
+function sortedKeys(value: Record<string, unknown>): string[] {
+  const keys: string[] = [];
+  for (const key of Object.keys(value)) {
+    const index = keys.findIndex((current) => current > key);
+    if (index === -1) {
+      keys.push(key);
+    } else {
+      keys.splice(index, 0, key);
+    }
+  }
+  return keys;
+}
+
+function dataOrThrow(value: unknown): unknown {
+  if (!value || typeof value !== "object") return value;
+  if (!("ok" in value)) return value;
+  if (value.ok === true && "data" in value) return value.data;
+  if (value.ok === false && "error" in value) throw value.error;
+  return value;
 }

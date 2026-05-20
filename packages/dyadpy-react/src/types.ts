@@ -1,12 +1,3 @@
-// Type-level helpers for `createDyadpyHooks`. The hooks accept the literal
-// method name on `api` and derive args / data / error / event types from the
-// signature TypeScript already knows about — no runtime reflection.
-//
-// `DataOf<F>` and `ErrorOf<F>` are the function-level cousins of `@dyadpy/ts`'s
-// `Ok<R>` and `Err<R>`. The difference: these unwrap the *function's* return
-// type, and they fall through to the raw payload for routes that don't carry
-// a `Result<…>` envelope (i.e. routes without `@raises(...)`).
-
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- generic over arbitrary callables
 type AnyFn = (...args: any[]) => any;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- match every function shape
@@ -50,5 +41,13 @@ export type StreamItemOf<F> = F extends AnyFn
     ? I
     : never
   : never;
+
+export type QueryKeyOf<TApi, K extends UnaryKeys<TApi>> =
+  ArgsOf<TApi[K]> extends void ? readonly [K] : readonly [K, ArgsOf<TApi[K]>];
+
+export type MaybeArgs<TApi, K extends UnaryKeys<TApi>, TOptions> =
+  ArgsOf<TApi[K]> extends void
+    ? readonly [args?: undefined, options?: TOptions]
+    : readonly [args: ArgsOf<TApi[K]>, options?: TOptions];
 
 export type SubscriptionStatus = "idle" | "connecting" | "open" | "closed" | "error";

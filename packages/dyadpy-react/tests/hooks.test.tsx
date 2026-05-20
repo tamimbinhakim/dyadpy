@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { describe, expect, expectTypeOf, it, vi } from "vitest";
 
 import { createReactClient } from "../src/index.js";
-import type { DataOf } from "../src/index.js";
+import type { DataOf, QueryKeyOf } from "../src/index.js";
 
 type Result<T, E> = { ok: true; data: T } | { ok: false; error: E };
 
@@ -54,7 +54,19 @@ describe("useQuery", () => {
     expect(client.getQueryData(["getIssue", { issueId: 2 }])).toEqual({ id: 2, title: "opts" });
   });
 
-  it("unwraps a Result.ok envelope into .data", async () => {
+  it("keeps selected query data typed", () => {
+    const getIssue = vi.fn(async () => ({ ok: true as const, data: { id: 3, title: "selected" } }));
+    const { queryOptions, queryKey } = createReactClient({ getIssue } as unknown as TestApi);
+    const options = queryOptions("getIssue", { issueId: 3 }, { select: (issue) => issue.title });
+
+    expectTypeOf(options.select).toEqualTypeOf<((issue: Issue) => string) | undefined>();
+    expectTypeOf<QueryKeyOf<TestApi, "getIssue">>().toEqualTypeOf<
+      readonly ["getIssue", { issueId: number }]
+    >();
+    expect(queryKey("getIssue", { issueId: 3 })).toEqual(["getIssue", { issueId: 3 }]);
+  });
+
+  it("returns Result.ok data", async () => {
     const getIssue = vi.fn(async () => ({ ok: true as const, data: { id: 1, title: "hi" } }));
     const { useQuery } = createReactClient({ getIssue } as unknown as TestApi);
 
@@ -105,7 +117,7 @@ describe("useMutation", () => {
     expectTypeOf<DataOf<TestApi["createIssue"]>>().toEqualTypeOf<Issue>();
   });
 
-  it("unwraps Result.ok on success", async () => {
+  it("returns Result.ok data on success", async () => {
     const createIssue = vi.fn(async () => ({ ok: true as const, data: { id: 5, title: "new" } }));
     const { useMutation } = createReactClient({ createIssue } as unknown as TestApi);
 

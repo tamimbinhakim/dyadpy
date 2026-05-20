@@ -9,6 +9,8 @@ export type {
   ArgsOf,
   DataOf,
   ErrorOf,
+  MaybeArgs,
+  QueryKeyOf,
   StreamItemOf,
   StreamKeys,
   SubscriptionStatus,
