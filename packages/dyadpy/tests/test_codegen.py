@@ -610,6 +610,11 @@ class _GenBatchOut(msgspec.Struct, Generic[_GenT, _GenE]):
     failed: list[_GenFailure[_GenT, _GenE]]
 
 
+class _GenPage(msgspec.Struct, Generic[_GenT]):
+    items: list[_GenT]
+    next_cursor: str | None = None
+
+
 class _GenItem(msgspec.Struct):
     name: str
 
@@ -630,3 +635,23 @@ def test_generic_struct_with_exception_in_type_args() -> None:
     # on ``error.kind``.
     assert "GenBatchOut" in out
     assert "kind" in out
+
+
+def test_generic_components_survive_duplicate_type_names() -> None:
+    run_a = msgspec.defstruct("Run", [("id", str)])
+    run_b = msgspec.defstruct("Run", [("id", str), ("status", str)])
+    app = App()
+
+    async def list_a() -> _GenPage[run_a]:  # type: ignore[valid-type]
+        return _GenPage(items=[])
+
+    async def list_b() -> _GenPage[run_b]:  # type: ignore[valid-type]
+        return _GenPage(items=[])
+
+    app.get("/a")(list_a)
+    app.get("/b")(list_b)
+
+    ir = build_ir(app)
+    assert len(ir.routes) == 2
+    assert len([name for name in ir.components if name.startswith("_GenPage_Run")]) == 2
+    render(ir)

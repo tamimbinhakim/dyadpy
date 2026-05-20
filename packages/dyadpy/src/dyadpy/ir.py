@@ -167,9 +167,8 @@ def build_ir(app: App) -> AppIR:
                 return full
             raise TypeError(str(t))
 
-        real_schemas, real_components = msgspec.json.schema_components(
+        real_schemas, real_components = _msgspec_schema_components(
             msgspec_types,
-            ref_template=_REF_TEMPLATE,
             schema_hook=_schema_hook,
         )
         for i, s in zip(msgspec_indices, real_schemas, strict=True):
@@ -270,6 +269,94 @@ def _split_pydantic_schema(
         components[str(title)] = schema
         return {"$ref": f"#/$defs/{title}"}, components
     return schema, components
+
+
+def _msgspec_schema_components(
+    types: list[Any],
+    *,
+    schema_hook: Any,
+) -> tuple[tuple[dict[str, Any], ...], dict[str, dict[str, Any]]]:
+    try:
+        return msgspec.json.schema_components(
+            types,
+            ref_template=_REF_TEMPLATE,
+            schema_hook=schema_hook,
+        )
+    except KeyError:
+        pass
+
+    schemas: list[dict[str, Any]] = []
+    components: dict[str, dict[str, Any]] = {}
+    for typ in types:
+        (schema,), next_components = msgspec.json.schema_components(
+            [typ],
+            ref_template=_REF_TEMPLATE,
+            schema_hook=schema_hook,
+        )
+        renames = _component_renames(components, next_components)
+        schemas.append(_rewrite_refs(schema, renames))
+        for name, component in next_components.items():
+            components[renames.get(name, name)] = _rewrite_refs(component, renames)
+    return tuple(schemas), components
+
+
+def _component_renames(
+    existing: dict[str, dict[str, Any]],
+    incoming: dict[str, dict[str, Any]],
+) -> dict[str, str]:
+    renames: dict[str, str] = {}
+    for name, schema in incoming.items():
+        if name not in existing or existing[name] == schema:
+            continue
+        renames[name] = _next_component_name(name, existing, incoming, renames)
+    for name, schema in incoming.items():
+        if name in renames or name not in existing:
+            continue
+        if existing[name] != _rewrite_refs(schema, renames):
+            renames[name] = _next_component_name(name, existing, incoming, renames)
+    return renames
+
+
+def _next_component_name(
+    name: str,
+    existing: dict[str, dict[str, Any]],
+    incoming: dict[str, dict[str, Any]],
+    renames: dict[str, str],
+) -> str:
+    suffix = 2
+    used = {*existing, *incoming, *renames.values()}
+    while True:
+        candidate = f"{name}{suffix}"
+        if candidate not in used:
+            return candidate
+        suffix += 1
+
+
+def _rewrite_refs(value: Any, renames: dict[str, str]) -> Any:
+    if not renames:
+        return value
+    if isinstance(value, dict):
+        rewritten: dict[str, Any] = {}
+        for key, item in value.items():
+            if key == "$ref" and isinstance(item, str):
+                rewritten[key] = _rewrite_ref(item, renames)
+            else:
+                rewritten[key] = _rewrite_refs(item, renames)
+        return rewritten
+    if isinstance(value, list):
+        return [_rewrite_refs(item, renames) for item in value]
+    return value
+
+
+def _rewrite_ref(ref: str, renames: dict[str, str]) -> str:
+    prefix = "#/$defs/"
+    if not ref.startswith(prefix):
+        return ref
+    name = ref.removeprefix(prefix)
+    renamed = renames.get(name)
+    if renamed is None:
+        return ref
+    return f"{prefix}{renamed}"
 
 
 def _synth_exc_type(exc: type[Exception]) -> Any:
