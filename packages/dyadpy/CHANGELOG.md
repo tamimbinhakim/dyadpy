@@ -7,6 +7,14 @@ from [Conventional Commits](https://www.conventionalcommits.org/).
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.6](https://github.com/tamimbinhakim/dyadpy/compare/dyadpy-v0.1.5...dyadpy-v0.1.6) (2026-05-20)
+
+
+### Bug Fixes
+
+* **dyadpy:** export generated api route type ([4ef8ed5](https://github.com/tamimbinhakim/dyadpy/commit/4ef8ed5936e893c18fd9228addde83f2f3c3a116))
+* **dyadpy:** mark generated clients as ignored ([29bcee7](https://github.com/tamimbinhakim/dyadpy/commit/29bcee736fb4d240bc28ba8d91887e83ffacb934))
+
 ## [0.1.5](https://github.com/tamimbinhakim/dyadpy/compare/dyadpy-v0.1.4...dyadpy-v0.1.5) (2026-05-20)
 
 
