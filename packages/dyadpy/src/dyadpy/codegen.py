@@ -124,7 +124,7 @@ def _render_api_interface(
     name_map: dict[str, str],
     route_names: dict[int, str],
 ) -> str:
-    lines = ["interface ApiRoutes {\n"]
+    lines = ["export interface ApiRoutes {\n"]
     for i, route in enumerate(ir.routes):
         if i > 0:
             lines.append("\n")

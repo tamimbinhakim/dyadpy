@@ -175,6 +175,7 @@ def test_render_emits_configurable_api_factory_for_ssr() -> None:
 
     out = render(build_ir(app))
     assert 'export type ApiClientOptions = Omit<ClientConfig, "routes">' in out
+    assert "export interface ApiRoutes" in out
     assert "export function createApi(options: ApiClientOptions = {}): ApiRoutes" in out
     assert "return createClient({ ...options, routes: _routes }) as ApiRoutes" in out
     assert "export const api = createApi()" in out
