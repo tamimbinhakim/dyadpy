@@ -7,6 +7,13 @@ from [Conventional Commits](https://www.conventionalcommits.org/).
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.5](https://github.com/tamimbinhakim/dyadpy/compare/dyadpy-v0.1.4...dyadpy-v0.1.5) (2026-05-20)
+
+
+### Bug Fixes
+
+* **dyadpy:** handle generic component name collisions ([adfa62d](https://github.com/tamimbinhakim/dyadpy/commit/adfa62d9c5de5003162a2d0af25a8e4854bb9f14))
+
 ## [0.1.4](https://github.com/tamimbinhakim/dyadpy/compare/dyadpy-v0.1.3...dyadpy-v0.1.4) (2026-05-20)
 
 
