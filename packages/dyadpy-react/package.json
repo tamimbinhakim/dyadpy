@@ -75,7 +75,7 @@
   },
   "peerDependencies": {
     "@tanstack/react-query": ">=5.0.0 <6",
-    "@dyadpy/ts": "workspace:*",
+    "@dyadpy/ts": ">=0.1.1-alpha.0 <0.2.0",
     "react": ">=18.0.0"
   },
   "engines": {

@@ -48,6 +48,35 @@ createRoot(document.getElementById("root")!).render(
 );
 ```
 
+## SSR Prefetch
+
+Use `@dyadpy/react/server` from React Server Components or other server
+loaders to prefetch into a TanStack `QueryClient`. Create a request-scoped
+Dyadpy client so auth headers and the server `baseUrl` do not leak across
+requests:
+
+```tsx
+import { dehydrate, QueryClient } from "@tanstack/react-query";
+import { prefetchQuery } from "@dyadpy/react/server";
+import { forwardHeaders } from "@dyadpy/ts";
+import { headers } from "next/headers";
+
+import { createApi } from "./client";
+
+const queryClient = new QueryClient();
+const api = createApi({
+  baseUrl: process.env.DYADPY_API_URL,
+  headers: forwardHeaders(await headers()),
+});
+
+await prefetchQuery(queryClient, api, "getIssue", { issueId: 1 });
+const dehydrated = dehydrate(queryClient);
+```
+
+The query key is the same `[methodName, args]` shape used by
+`createDyadpyHooks(api).useQuery(...)`, so hydrated client components pick
+up prefetched data without a second request.
+
 ## `useQuery`
 
 ```tsx
