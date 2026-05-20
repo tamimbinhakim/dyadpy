@@ -463,11 +463,19 @@ def _convert_query_value(raw: str, t: Any) -> Any:
     if t is str or t is Any or t is inspect.Signature.empty:
         return raw
     if t is bool:
-        return raw.lower() in ("true", "1", "yes", "on")
+        normalized = raw.lower()
+        if normalized in ("true", "1", "yes", "on"):
+            return True
+        if normalized in ("false", "0", "no", "off"):
+            return False
+        raise msgspec.ValidationError(f"Invalid boolean value {raw!r}")
     try:
         return msgspec.convert(raw, type=t, strict=False)
-    except msgspec.ValidationError:
-        return msgspec.json.decode(raw.encode(), type=t)
+    except msgspec.ValidationError as first:
+        try:
+            return msgspec.json.decode(raw.encode(), type=t)
+        except (msgspec.DecodeError, msgspec.ValidationError) as fallback:
+            raise first from fallback
 
 
 def _is_list_type(t: Any) -> bool:

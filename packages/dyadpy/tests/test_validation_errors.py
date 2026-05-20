@@ -147,3 +147,18 @@ def test_bad_list_query_item_returns_422_not_500() -> None:
     body = r.json()
     assert body["location"] == "query"
     assert body["field"] == "ids"
+
+
+def test_bad_bool_query_param_returns_422() -> None:
+    app = App()
+
+    @app.get("/search")
+    async def search(active: bool) -> dict[str, bool]:
+        return {"active": active}
+
+    r = TestClient(app, raise_server_exceptions=False).get("/search?active=maybe")
+    assert r.status_code == 422
+    body = r.json()
+    assert body["location"] == "query"
+    assert body["field"] == "active"
+    assert body["value"] == "maybe"
