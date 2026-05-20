@@ -33,7 +33,7 @@ import { prefetchQuery } from "@dyadpy/react/server";
 import { forwardHeaders } from "@dyadpy/ts";
 import { headers } from "next/headers";
 
-import { api } from "@/lib/dyadpy/client";
+import { createApi } from "@/lib/dyadpy/client";
 import { UserCard } from "./UserCard"; // client component using `useDyadpy.useQuery`
 
 export default async function Page({
@@ -44,9 +44,10 @@ export default async function Page({
   const { id } = await params;
   const qc = new QueryClient();
 
-  // Forward cookies / auth so the SSR call is authenticated as the user.
-  const incoming = new Request("https://x/", { headers: await headers() });
-  api.headers = forwardHeaders(incoming); // or pass per-call via `opts.headers`
+  const api = createApi({
+    baseUrl: process.env.DYADPY_API_URL,
+    headers: forwardHeaders(await headers()),
+  });
 
   await prefetchQuery(qc, api, "getUser", { userId: Number(id) });
 
@@ -77,10 +78,15 @@ await prefetchQueries(qc, api, [
 ```ts
 // src/routes/me/+page.server.ts
 import { loadQuery } from "@dyadpy/svelte/server";
-import { api } from "$lib/dyadpy/client";
+import { createApi } from "$lib/dyadpy/client";
 
 export const load = async (event) => ({
-  me: await loadQuery(api, "me", undefined, event),
+  me: await loadQuery(
+    createApi({ baseUrl: event.url.origin }),
+    "me",
+    undefined,
+    event,
+  ),
 });
 ```
 
@@ -105,12 +111,13 @@ import { createAsync } from "@solidjs/router";
 import { getRequestEvent } from "solid-js/web";
 import { serverQuery } from "@dyadpy/solid/server";
 
-import { api } from "~/lib/dyadpy/client";
+import { createApi } from "~/lib/dyadpy/client";
 
 const fetchMe = async () => {
   "use server";
   const event = getRequestEvent();
   if (!event) throw new Error("server-only");
+  const api = createApi({ baseUrl: new URL(event.request.url).origin });
   return serverQuery(api, "me", undefined, event.request);
 };
 
@@ -134,6 +141,8 @@ framework package):
   `{ headers: Headers }` shape, so it composes with Next.js
   `headers()`, SvelteKit `event.request`, SolidStart `event.request`,
   and any plain `Request`.
+- Generated clients export both `api` for browser-relative calls and
+  `createApi({ baseUrl, headers, fetch })` for request-scoped SSR calls.
 
 ## What we don't do
 

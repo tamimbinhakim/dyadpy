@@ -9,12 +9,14 @@ export const DEFAULT_FORWARDED_HEADERS: readonly string[] = [
   "x-forwarded-host",
 ] as const;
 
+type HeadersLike = Pick<Headers, "get">;
+
 /** Pull a subset of headers off an incoming Request to replay on an outgoing Dyadpy call. */
 export function forwardHeaders(
-  source: { headers: Headers } | Headers,
+  source: { headers: HeadersLike } | HeadersLike,
   names: readonly string[] = DEFAULT_FORWARDED_HEADERS,
 ): Record<string, string> {
-  const headers = source instanceof Headers ? source : source.headers;
+  const headers = "headers" in source ? source.headers : source;
   const out: Record<string, string> = {};
   for (const name of names) {
     const value = headers.get(name);

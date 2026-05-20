@@ -30,6 +30,16 @@ describe("forwardHeaders", () => {
     expect(forwardHeaders(headers)["cookie"]).toBe("k=v");
   });
 
+  it("accepts read-only Headers-like values", () => {
+    const headers = {
+      get(name: string) {
+        return name.toLowerCase() === "authorization" ? "Bearer readonly" : null;
+      },
+    };
+
+    expect(forwardHeaders(headers)["authorization"]).toBe("Bearer readonly");
+  });
+
   it("honors a custom name list", () => {
     const req = new Request("https://example.com/", {
       headers: { "X-Custom": "yes", Cookie: "session=abc" },

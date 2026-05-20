@@ -37,7 +37,7 @@ _DIVIDER_WIDTH = 78
 def _render_header(ir: AppIR) -> str:
     # Streaming routes signal errors as SSE `event: error` frames, not as Result
     # envelopes — so `Result` is only imported when at least one unary route raises.
-    type_imports = ["CallOptions", "RouteDescriptor"]
+    type_imports = ["CallOptions", "ClientConfig", "RouteDescriptor"]
     if any(route.raises and not route.streams for route in ir.routes):
         type_imports.insert(1, "Result")
     return (
@@ -58,6 +58,7 @@ def render(ir: AppIR) -> str:
     parts: list[str] = [_render_header(ir)]
 
     name_map = _disambiguate(ir.components.keys())
+    route_names = _route_ts_names(ir)
     error_names = {e.name for r in ir.routes for e in r.raises}
 
     domain_keys = sorted(k for k in ir.components if name_map[k] not in error_names)
@@ -77,12 +78,18 @@ def render(ir: AppIR) -> str:
         parts.append(enum_block)
 
     parts.append(_section("Client"))
-    parts.append(_render_api_interface(ir, name_map))
+    parts.append(_render_api_interface(ir, name_map, route_names))
     parts.append("\n")
-    parts.append(_render_route_table(ir))
-    parts.append("\nexport const api = createClient({ routes: _routes }) as ApiRoutes;\n")
+    parts.append(_render_route_table(ir, route_names))
+    parts.append(
+        '\nexport type ApiClientOptions = Omit<ClientConfig, "routes">;\n\n'
+        "export function createApi(options: ApiClientOptions = {}): ApiRoutes {\n"
+        "  return createClient({ ...options, routes: _routes }) as ApiRoutes;\n"
+        "}\n\n"
+        "export const api = createApi();\n",
+    )
 
-    namespace = _render_routes_namespace(ir, name_map)
+    namespace = _render_routes_namespace(ir, name_map, route_names)
     if namespace:
         parts.append(_section("Per-route type aliases"))
         parts.append(namespace)
@@ -112,22 +119,26 @@ def _type_doc(schema: dict[str, Any], ts_name: str) -> str | None:
     return None
 
 
-def _render_api_interface(ir: AppIR, name_map: dict[str, str]) -> str:
+def _render_api_interface(
+    ir: AppIR,
+    name_map: dict[str, str],
+    route_names: dict[int, str],
+) -> str:
     lines = ["interface ApiRoutes {\n"]
     for i, route in enumerate(ir.routes):
         if i > 0:
             lines.append("\n")
         if route.description:
             lines.append(_jsdoc(route.description, indent="  "))
-        lines.append("  " + _render_method_signature(route, name_map) + "\n")
+        lines.append("  " + _render_method_signature(route, name_map, route_names[i]) + "\n")
     lines.append("}\n")
     return "".join(lines)
 
 
-def _render_route_table(ir: AppIR) -> str:
+def _render_route_table(ir: AppIR, route_names: dict[int, str]) -> str:
     lines = ["const _routes: ReadonlyArray<RouteDescriptor> = [\n"]
-    for route in ir.routes:
-        lines.append(_render_route_descriptor(route, indent="  ") + ",\n")
+    for i, route in enumerate(ir.routes):
+        lines.append(_render_route_descriptor(route, route_names[i], indent="  ") + ",\n")
     lines.append("];\n")
     return "".join(lines)
 
@@ -176,15 +187,18 @@ def _unique_enum_name(base: str, type_names: set[str], used: set[str]) -> str:
         i += 1
 
 
-def _render_routes_namespace(ir: AppIR, name_map: dict[str, str]) -> str:
+def _render_routes_namespace(
+    ir: AppIR,
+    name_map: dict[str, str],
+    route_names: dict[int, str],
+) -> str:
     if not ir.routes:
         return ""
     out = ["export namespace Routes {\n"]
     for i, route in enumerate(ir.routes):
         if i > 0:
             out.append("\n")
-        name = _safe_ident(_to_camel(route.name))
-        out.append(f"  export namespace {name} {{\n")
+        out.append(f"  export namespace {route_names[i]} {{\n")
 
         args_type, _ = _render_args_type(route.params, name_map, indent="    ")
         if args_type:
@@ -323,8 +337,8 @@ def _is_reserved(name: str) -> bool:
 
 
 def _check_route_name_collisions(ir: AppIR) -> None:
-    # A silent collision in the runtime `byName` map would dispatch one route's
-    # call to another with the same camelCase — fail loudly at codegen instead.
+    # Different Python names that camelCase to the same method name are ambiguous.
+    # Exact duplicates are valid for file routers and are disambiguated below.
     seen: dict[str, str] = {}
     for route in ir.routes:
         camel = _to_camel(route.name)
@@ -336,6 +350,45 @@ def _check_route_name_collisions(ir: AppIR) -> None:
                 "disambiguate before regenerating.",
             )
         seen[camel] = route.name
+
+
+def _route_ts_names(ir: AppIR) -> dict[int, str]:
+    base_names = [_safe_ident(_to_camel(route.name)) for route in ir.routes]
+    counts: dict[str, int] = {}
+    for name in base_names:
+        counts[name] = counts.get(name, 0) + 1
+
+    used: set[str] = set()
+    out: dict[int, str] = {}
+    for i, route in enumerate(ir.routes):
+        base = base_names[i]
+        candidate = base if counts[base] == 1 else _path_qualified_route_name(route)
+        candidate = _unique_route_name(candidate, used)
+        used.add(candidate)
+        out[i] = candidate
+    return out
+
+
+def _path_qualified_route_name(route: RouteIR) -> str:
+    parts = _route_path_parts(route.path)
+    stem = _to_camel("_".join(parts)) if parts else "root"
+    return _safe_ident(stem + _pascal(route.name))
+
+
+def _route_path_parts(path: str) -> list[str]:
+    return [part for part in re.split(r"[^0-9A-Za-z]+", path) if part]
+
+
+def _unique_route_name(candidate: str, used: set[str]) -> str:
+    if candidate not in used and not _is_reserved(candidate):
+        return candidate
+    base = candidate if not _is_reserved(candidate) else f"{candidate}_"
+    i = 2
+    while True:
+        suffixed = f"{base}_{i}"
+        if suffixed not in used:
+            return suffixed
+        i += 1
 
 
 def _module_prefixed(full_key: str) -> str:
@@ -494,15 +547,14 @@ def _field_doc(schema: Any) -> str:
     return str(desc) if isinstance(desc, str) and desc.strip() else ""
 
 
-def _render_method_signature(route: RouteIR, name_map: dict[str, str]) -> str:
+def _render_method_signature(route: RouteIR, name_map: dict[str, str], route_name: str) -> str:
     args_type, args_optional = _render_args_type(route.params, name_map, indent="  ")
     return_type = _render_return_type(route, name_map)
-    name = _safe_ident(_to_camel(route.name))
     if args_type is None:
-        return f"{name}(opts?: CallOptions): {return_type};"
+        return f"{route_name}(opts?: CallOptions): {return_type};"
 
     inline = (
-        f"{name}(args{'?' if args_optional else ''}: {args_type}, opts?: CallOptions): "
+        f"{route_name}(args{'?' if args_optional else ''}: {args_type}, opts?: CallOptions): "
         f"{return_type};"
     )
     if "\n" not in inline and len(inline) <= _INLINE_LINE_BUDGET:
@@ -510,7 +562,7 @@ def _render_method_signature(route: RouteIR, name_map: dict[str, str]) -> str:
 
     indented_args = textwrap.indent(args_type, "  ").lstrip()
     return (
-        f"{name}(\n"
+        f"{route_name}(\n"
         f"    args{'?' if args_optional else ''}: {indented_args},\n"
         f"    opts?: CallOptions,\n"
         f"  ): {return_type};"
@@ -560,11 +612,11 @@ def _render_error_union(raises: list[Any], name_map: dict[str, str], *, indent: 
     )
 
 
-def _render_route_descriptor(route: RouteIR, *, indent: str) -> str:
+def _render_route_descriptor(route: RouteIR, route_name: str, *, indent: str) -> str:
     parts = [
         f"method: {json.dumps(route.method)}",
         f"path: {json.dumps(route.path)}",
-        f"name: {json.dumps(_to_camel(route.name))}",
+        f"name: {json.dumps(route_name)}",
     ]
     if route.params:
         parts.append(_render_param_descriptor_list(route.params, indent=indent))

@@ -230,8 +230,15 @@ Prefetch on the server, hydrate on the client — first paint with no waterfall.
 ```tsx
 // Next.js App Router server component
 import { prefetchQuery } from "@dyadpy/react/server";
+import { forwardHeaders } from "@dyadpy/ts";
+import { headers } from "next/headers";
+import { createApi } from "@/lib/dyadpy/client";
 
 const qc = new QueryClient();
+const api = createApi({
+  baseUrl: process.env.DYADPY_API_URL,
+  headers: forwardHeaders(await headers()),
+});
 await prefetchQuery(qc, api, "getUser", { userId: 1 });
 return <HydrationBoundary state={dehydrate(qc)}>{...}</HydrationBoundary>;
 ```

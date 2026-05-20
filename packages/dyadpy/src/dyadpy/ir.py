@@ -149,12 +149,12 @@ def build_ir(app: App) -> AppIR:
         # can narrow on ``error.kind`` either way. We inline the schema (no
         # ``$ref``) because the schema_hook can't add to the shared components
         # dict — codegen tolerates the duplication.
-        def _schema_hook(t: type) -> dict[str, Any]:
+        def _schema_hook(t: type[Any]) -> dict[str, Any]:
             # ``object`` (and bare ``Any``) shows up when a generic Struct uses
             # ``T`` for a heterogeneous slot — emit "any" rather than failing.
             if t is object:
                 return {}
-            if isinstance(t, type) and issubclass(t, Exception):
+            if issubclass(t, Exception):
                 synth = _synth_exc_type(t)
                 full = msgspec.json.schema(synth)
                 defs = cast("dict[str, dict[str, Any]]", full.pop("$defs", {}) or {})
@@ -165,7 +165,7 @@ def build_ir(app: App) -> AppIR:
                     if inlined is not None:
                         return inlined
                 return full
-            raise TypeError(t)
+            raise TypeError(str(t))
 
         real_schemas, real_components = msgspec.json.schema_components(
             msgspec_types,

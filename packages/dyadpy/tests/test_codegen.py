@@ -117,7 +117,7 @@ def test_result_import_omitted_when_no_route_raises() -> None:
         return "pong"
 
     out = render(build_ir(app))
-    assert 'import type { CallOptions, RouteDescriptor } from "@dyadpy/ts";' in out
+    assert 'import type { CallOptions, ClientConfig, RouteDescriptor } from "@dyadpy/ts";' in out
     assert "Result" not in out
 
 
@@ -139,7 +139,7 @@ def test_result_import_omitted_for_streaming_only_raises() -> None:
         yield Tick(n=1)
 
     out = render(build_ir(app))
-    assert 'import type { CallOptions, RouteDescriptor } from "@dyadpy/ts";' in out
+    assert 'import type { CallOptions, ClientConfig, RouteDescriptor } from "@dyadpy/ts";' in out
     assert "Result<" not in out
 
 
@@ -160,7 +160,24 @@ def test_result_import_present_when_any_route_raises() -> None:
         return {"id": thing_id}
 
     out = render(build_ir(app))
-    assert 'import type { CallOptions, Result, RouteDescriptor } from "@dyadpy/ts";' in out
+    assert (
+        'import type { CallOptions, Result, ClientConfig, RouteDescriptor } from "@dyadpy/ts";'
+        in out
+    )
+
+
+def test_render_emits_configurable_api_factory_for_ssr() -> None:
+    app = App()
+
+    @app.get("/users/{user_id}")
+    async def get_user(user_id: int) -> dict[str, int]:
+        return {"id": user_id}
+
+    out = render(build_ir(app))
+    assert 'export type ApiClientOptions = Omit<ClientConfig, "routes">' in out
+    assert "export function createApi(options: ApiClientOptions = {}): ApiRoutes" in out
+    assert "return createClient({ ...options, routes: _routes }) as ApiRoutes" in out
+    assert "export const api = createApi()" in out
 
 
 def test_descriptor_includes_param_locations() -> None:
@@ -468,6 +485,30 @@ def test_route_name_collision_raises() -> None:
     ir = build_ir(app)
     with pytest.raises(ValueError, match="getUser"):
         render(ir)
+
+
+def test_duplicate_route_names_are_path_qualified() -> None:
+    app = App()
+
+    @app.get("/accounts/{id}")
+    async def show_account(id: str) -> dict[str, str]:
+        return {"id": id}
+
+    @app.get("/customers/{id}")
+    async def show_customer(id: str) -> dict[str, str]:
+        return {"id": id}
+
+    show_account.__name__ = "show"
+    show_customer.__name__ = "show"
+
+    out = render(build_ir(app))
+    assert "accountsIdShow(" in out
+    assert "customersIdShow(" in out
+    assert 'name: "accountsIdShow"' in out
+    assert 'name: "customersIdShow"' in out
+    assert "export namespace accountsIdShow" in out
+    assert "export namespace customersIdShow" in out
+    assert 'name: "show"' not in out
 
 
 def test_enum_const_collision_with_type_name_gets_enum_suffix() -> None:
