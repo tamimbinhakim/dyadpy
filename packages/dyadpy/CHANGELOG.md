@@ -7,6 +7,13 @@ from [Conventional Commits](https://www.conventionalcommits.org/).
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.3](https://github.com/tamimbinhakim/dyadpy/compare/dyadpy-v0.1.2...dyadpy-v0.1.3) (2026-05-20)
+
+
+### Bug Fixes
+
+* validate primitive request params ([27bd010](https://github.com/tamimbinhakim/dyadpy/commit/27bd0106919bfdd41d2316d21fd2a544b181b1b5))
+
 ## [0.1.2](https://github.com/tamimbinhakim/dyadpy/compare/dyadpy-v0.1.1...dyadpy-v0.1.2) (2026-05-19)
 
 
