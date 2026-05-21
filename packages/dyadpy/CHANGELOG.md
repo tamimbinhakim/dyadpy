@@ -7,6 +7,19 @@ from [Conventional Commits](https://www.conventionalcommits.org/).
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.8](https://github.com/tamimbinhakim/dyadpy/compare/dyadpy-v0.1.7...dyadpy-v0.1.8) (2026-05-21)
+
+
+### Features
+
+* **dyadpy:** export _routes from generated client ([2d8d13f](https://github.com/tamimbinhakim/dyadpy/commit/2d8d13fcabdbc7db2fd430875fbc41ffc8a629ac))
+* standardize nested typed clients ([93ad484](https://github.com/tamimbinhakim/dyadpy/commit/93ad484eb0785e0af07790afb7f939114646cb07))
+
+
+### Bug Fixes
+
+* improve react client ssr typing ([631cc83](https://github.com/tamimbinhakim/dyadpy/commit/631cc83d06bb4245cc6758c0002327a7c32a4dcd))
+
 ## [0.1.7](https://github.com/tamimbinhakim/dyadpy/compare/dyadpy-v0.1.6...dyadpy-v0.1.7) (2026-05-20)
 
 
