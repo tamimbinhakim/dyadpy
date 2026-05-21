@@ -47,10 +47,12 @@ function makeQueryKey(method: string, args?: unknown): readonly unknown[] {
 
 type Unary = (args?: unknown, opts?: { signal?: AbortSignal }) => Promise<unknown>;
 type Stream = (args?: unknown, opts?: { signal?: AbortSignal }) => AsyncIterable<unknown>;
-type AnyRouteFn = (...args: never[]) => unknown;
+// Generated route functions have concrete argument tuples. Keep this broad so
+// conditional types preserve those tuples instead of collapsing optional args.
+type AnyRouteFn = (...args: any[]) => unknown;
 type QueryKey = readonly unknown[];
 
-type AwaitedReturn<F> = F extends (...args: never[]) => infer R ? Awaited<R> : never;
+type AwaitedReturn<F> = F extends (...args: any[]) => infer R ? Awaited<R> : never;
 type ResultData<T> = T extends { ok: true; data: infer D } ? D : never;
 type UnwrappedData<F> = [ResultData<AwaitedReturn<F>>] extends [never]
   ? AwaitedReturn<F>
@@ -126,7 +128,7 @@ export type ReactLeaf<F> = {
   useMutation: (
     options?: MutationOptionInput<F>,
   ) => UseMutationResult<UnwrappedData<F>, RouteError<F>, MutationVars<F>>;
-  useSubscription: F extends (...args: never[]) => AsyncIterable<infer TEvent>
+  useSubscription: F extends (...args: any[]) => AsyncIterable<infer TEvent>
     ? WithOptionalArgs<F, UseDyadpySubscriptionOptions<TEvent>, UseDyadpySubscriptionResult>
     : never;
 };

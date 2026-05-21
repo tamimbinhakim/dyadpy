@@ -26,6 +26,9 @@ interface GeneratedApi {
   ping: {
     list(): Promise<{ ok: true; pong: true }>;
   };
+  search: {
+    list(args?: { q?: string; limit?: number }): Promise<Issue[]>;
+  };
   events: {
     list(args: { topic: string }): AsyncIterable<{ kind: "tick"; n: number }>;
   };
@@ -41,6 +44,14 @@ const ROUTES: ProxyRouteDescriptor[] = [
     params: [{}],
   },
   { method: "GET", path: "/ping", name: "rawPing", segments: ["ping"], verb: "list" },
+  {
+    method: "GET",
+    path: "/search",
+    name: "search",
+    segments: ["search"],
+    verb: "list",
+    params: [{}],
+  },
   {
     method: "POST",
     path: "/issues",
@@ -71,6 +82,9 @@ type PartialGeneratedApi = {
   ping?: {
     list?: GeneratedApi["ping"]["list"];
   };
+  search?: {
+    list?: GeneratedApi["search"]["list"];
+  };
   events?: {
     list?: GeneratedApi["events"]["list"];
   };
@@ -94,6 +108,9 @@ type _CreateMutationError = Expect<Equal<CreateMutation["error"], IssueNotFound 
 function typeAssertions() {
   typedApi.issues.byId.useQuery({ issueId: 1 });
   typedApi.ping.list.useQuery({ enabled: false });
+  typedApi.search.list.useQuery({ q: "open", limit: 10 });
+  typedApi.search.list.useQuery(undefined, { enabled: false });
+  typedApi.search.list.queryOptions({ q: "open" }, { staleTime: 1000 });
   typedApi.issues.create.useMutation().mutate({ data: { title: "ok" } });
   typedApi.events.list.useSubscription(
     { topic: "builds" },
