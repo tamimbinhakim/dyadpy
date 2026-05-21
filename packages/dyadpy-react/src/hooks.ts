@@ -59,9 +59,13 @@ type UnwrappedData<F> = [ResultData<AwaitedReturn<F>>] extends [never]
   : ResultData<AwaitedReturn<F>>;
 type RouteError<F> = [Err<AwaitedReturn<F>>] extends [never] ? Error : Err<AwaitedReturn<F>>;
 type ParamsOf<F> = F extends (...args: infer P) => unknown ? P : never;
-type FirstParam<F> = ParamsOf<F> extends [infer A, ...unknown[]] ? A : never;
+type FirstParam<F> = ParamsOf<F> extends [] ? never : ParamsOf<F>[0];
 type HasArgs<F> =
-  ParamsOf<F> extends [] ? false : NonNullable<FirstParam<F>> extends CallOptions ? false : true;
+  ParamsOf<F> extends []
+    ? false
+    : Exclude<FirstParam<F>, undefined> extends CallOptions
+      ? false
+      : true;
 type ArgsOf<F> = HasArgs<F> extends true ? FirstParam<F> : never;
 type MutationVars<F> = HasArgs<F> extends true ? NonNullable<ArgsOf<F>> : void;
 type QueryOptionInput<F> = Omit<
