@@ -111,7 +111,10 @@ def _render_api_interface(
 
 
 def _render_route_table(ir: AppIR, route_names: dict[int, str]) -> str:
-    lines = ["const _routes: ReadonlyArray<RouteDescriptor> = [\n"]
+    # Exported so consumers can build extra clients on top — e.g.
+    # ``@dyadpy/react``'s ``createNestedClient`` needs the descriptors at
+    # runtime to derive the tRPC-style nested namespace.
+    lines = ["export const _routes: ReadonlyArray<RouteDescriptor> = [\n"]
     for i, route in enumerate(ir.routes):
         lines.append(_render_route_descriptor(route, route_names[i], indent="  ") + ",\n")
     lines.append("];\n")
