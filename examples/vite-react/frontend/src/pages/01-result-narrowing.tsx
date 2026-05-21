@@ -11,7 +11,7 @@ export function ResultNarrowing() {
   const [out, setOut] = useState("Click a button.");
 
   async function go(issueId: number) {
-    const result = await api.getIssue({ issueId }, { headers: AUTH });
+    const result = await api.issues.byId({ issueId }, { headers: AUTH });
 
     if (result.ok) {
       // result.data: Issue

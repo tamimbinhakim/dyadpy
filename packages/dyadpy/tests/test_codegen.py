@@ -179,9 +179,13 @@ def test_render_emits_configurable_api_factory_for_ssr() -> None:
     )
     assert 'export type ApiClientOptions = Omit<ClientConfig, "routes">' in out
     assert "export interface ApiRoutes" in out
+    assert "users: {" in out
+    assert "byId(args: { userId: number }, opts?: CallOptions)" in out
     assert "export function createApi(options: ApiClientOptions = {}): ApiRoutes" in out
-    assert "return createClient({ ...options, routes: _routes }) as ApiRoutes" in out
+    assert "return createClient<ApiRoutes>({ ...options, routes: _routes })" in out
     assert "export const api = createApi()" in out
+    assert 'segments: ["users"]' in out
+    assert 'verb: "byId"' in out
 
 
 def test_descriptor_includes_param_locations() -> None:
@@ -251,6 +255,21 @@ def test_route_namespace_for_streaming_endpoint() -> None:
     assert "export namespace chat" in out
     assert "export type Event = Token" in out
     assert "export type Return = AsyncIterable<Event>" in out
+
+
+def test_mixed_param_path_segments_preserve_literal_namespace() -> None:
+    app = App()
+
+    @app.get("/exports/{id}.csv")
+    async def export_csv(id: str) -> dict[str, str]:
+        return {"id": id}
+
+    out = render(build_ir(app))
+    assert "exports: {" in out
+    assert "csv: {" in out
+    assert "byId(args: { id: string }, opts?: CallOptions)" in out
+    assert 'segments: ["exports", "csv"]' in out
+    assert 'verb: "byId"' in out
 
 
 def test_enum_field_emits_const_value_object() -> None:
@@ -344,7 +363,7 @@ def test_handler_docstring_not_emitted_as_jsdoc() -> None:
 
     out = render(build_ir(app))
     assert "Health probe" not in out
-    assert "ping(" in out
+    assert "list(opts?: CallOptions): Promise<string>;" in out
 
 
 def test_multi_line_docstring_not_emitted_as_jsdoc() -> None:
@@ -361,7 +380,7 @@ def test_multi_line_docstring_not_emitted_as_jsdoc() -> None:
     out = render(build_ir(app))
     assert "First line." not in out
     assert "Second paragraph with extra detail." not in out
-    assert "x(" in out
+    assert "list(opts?: CallOptions): Promise<number>;" in out
 
 
 def test_msgspec_auto_title_not_emitted_as_jsdoc() -> None:
@@ -449,8 +468,8 @@ def test_long_method_signature_wraps_args() -> None:
 
     out = render(build_ir(app))
     # Args + opts wrap to their own lines once the inline form exceeds 100 cols.
-    assert "searchWithManyFilters(\n    args:" in out
-    assert "opts?: CallOptions,\n  )" in out
+    assert "list(\n      args:" in out
+    assert "opts?: CallOptions,\n    )" in out
 
 
 def test_struct_named_array_gets_renamed_to_avoid_shadowing_builtin() -> None:
@@ -520,10 +539,14 @@ def test_duplicate_route_names_are_path_qualified() -> None:
     show_customer.__name__ = "show"
 
     out = render(build_ir(app))
-    assert "accountsIdShow(" in out
-    assert "customersIdShow(" in out
+    assert "accounts: {" in out
+    assert "customers: {" in out
+    assert "byId(args: { id: string }, opts?: CallOptions): Promise<Record<string, string>>;" in out
     assert 'name: "accountsIdShow"' in out
     assert 'name: "customersIdShow"' in out
+    assert 'segments: ["accounts"]' in out
+    assert 'segments: ["customers"]' in out
+    assert 'verb: "byId"' in out
     assert "export namespace accountsIdShow" in out
     assert "export namespace customersIdShow" in out
     assert 'name: "show"' not in out

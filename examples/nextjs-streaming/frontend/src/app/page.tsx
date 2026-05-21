@@ -37,7 +37,7 @@ export default function Page() {
         // no `any`. Add a new event variant on the server and the codegen will
         // expand this union; TS will then flag the `switch` as non-exhaustive
         // until you handle (or explicitly drop) the new case.
-        for await (const ev of api.watchDeployment({ jobId }, { signal: ac.signal })) {
+        for await (const ev of api.deployments.events.list({ jobId }, { signal: ac.signal })) {
           setState((s) => {
             switch (ev.kind) {
               case "provisioning": {
@@ -179,5 +179,7 @@ function Phases({ phase }: { phase: State["phase"] }) {
 }
 
 function levelColor(level: BuildLog["level"]) {
-  return level === "error" ? "#ff6b6b" : level === "warn" ? "#ffd166" : "#9efd9e";
+  if (level === "error") return "#ff6b6b";
+  if (level === "warn") return "#ffd166";
+  return "#9efd9e";
 }

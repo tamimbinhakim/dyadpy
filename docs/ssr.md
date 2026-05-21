@@ -29,12 +29,13 @@ import {
   HydrationBoundary,
   QueryClient,
 } from "@tanstack/react-query";
-import { prefetchQuery } from "@dyadpy/react/server";
+import { createReactClient } from "@dyadpy/react";
+import { prefetchQueries, prefetchQuery } from "@dyadpy/react/server";
 import { forwardHeaders } from "@dyadpy/ts";
 import { headers } from "next/headers";
 
-import { createApi } from "@/lib/dyadpy/client";
-import { UserCard } from "./UserCard"; // client component using `useDyadpy.useQuery`
+import { createApi, _routes } from "@/lib/dyadpy/client";
+import { UserCard } from "./UserCard"; // client component using `dyad.users.byId.useQuery`
 
 export default async function Page({
   params,
@@ -48,8 +49,9 @@ export default async function Page({
     baseUrl: process.env.DYADPY_API_URL,
     headers: forwardHeaders(await headers()),
   });
+  const dyad = createReactClient(api, _routes);
 
-  await prefetchQuery(qc, api, "getUser", { userId: Number(id) });
+  await prefetchQuery(qc, dyad.users.byId, { userId: Number(id) });
 
   return (
     <HydrationBoundary state={dehydrate(qc)}>
@@ -59,17 +61,17 @@ export default async function Page({
 }
 ```
 
-The client component uses `useDyadpy.useQuery("getUser", { userId: 1 })`
-with the same query key — React Query finds the dehydrated entry and
-renders instantly without a refetch.
+The client component uses `dyad.users.byId.useQuery({ userId: 1 })` with
+the same query key — React Query finds the dehydrated entry and renders
+instantly without a refetch.
 
 Multiple calls in parallel:
 
 ```ts
-await prefetchQueries(qc, api, [
-  ["getUser", { userId: 1 }],
-  ["listPosts", { authorId: 1, limit: 20 }],
-  ["getInbox", undefined],
+await prefetchQueries(qc, [
+  [dyad.users.byId, { userId: 1 }],
+  [dyad.posts.list, { authorId: 1, limit: 20 }],
+  [dyad.inbox.list],
 ]);
 ```
 
@@ -144,14 +146,42 @@ framework package):
 - Generated clients export both `api` for browser-relative calls and
   `createApi({ baseUrl, headers, fetch })` for request-scoped SSR calls.
 
+## Proxy / CORS Setup
+
+If the browser talks to a local proxy instead of the Python server
+directly, configure the generated client with that proxy path:
+
+```ts
+import { createReactClient } from "@dyadpy/react";
+import { createApi, _routes } from "@/lib/dyadpy/client";
+
+const api = createApi({ baseUrl: "/api/dyadpy" });
+export const dyad = createReactClient(api, _routes);
+```
+
+For SSR, use the absolute internal URL instead:
+
+```ts
+const api = createApi({
+  baseUrl: process.env.DYADPY_API_URL,
+  headers: forwardHeaders(await headers()),
+});
+```
+
+The TanStack `QueryClient` does not need a special proxy setting. It only
+sees query keys and promises; the configured Dyadpy client owns the
+transport.
+
 ## What we don't do
 
-- **No magic `useDyadpy.useSuspenseQuery`.** If you want suspense, use
-  `useQuery({ suspense: true })` (TanStack) or `createAsync` (Solid)
-  on top of the existing hook — the SSR prefetch already populates the
-  cache so suspense resolves synchronously.
+- **No parallel hook naming.** React uses the generated nested namespace:
+  `dyad.users.byId.useQuery(...)`, `dyad.users.byId.useSuspenseQuery(...)`,
+  and `dyad.users.create.useMutation(...)`.
+- **No callable namespace aliases.** A `GET /chat` route is
+  `api.chat.list()` / `dyad.chat.list.useQuery()`, not `api.chat()`. The
+  explicit leaf keeps the shape stable when child routes appear.
 - **No server-action wrappers.** A Next.js server action or a SvelteKit
-  form action is just a function — call `api.foo({ ... })` directly. The
+  form action is just a function — call `api.posts.create({ ... })` directly. The
   generated client works the same way on the server as on the browser.
 - **No custom transport for streaming SSR.** Streaming endpoints
   (`stream[T]`) are inherently client-side over SSE. If your initial

@@ -74,9 +74,9 @@ in your frontend:
 ```ts
 import { api } from "@/lib/dyadpy/client";
 
-const post = await api.createPost({ data: { title: "hi", body: "world" } });
+const post = await api.posts.create({ data: { title: "hi", body: "world" } });
 
-for await (const ev of api.ticks({ count: 10 })) {
+for await (const ev of api.ticks.list({ count: 10 })) {
   /* typed */
 }
 ```

@@ -15,8 +15,8 @@
  * api.notifications.stream.useSubscription(args, { onEvent });
  * ```
  *
- * Naming rules live in `./proxy.ts`. The flat-key shape (`client.useQuery("listX")`)
- * that previous pre-releases exposed is gone; there is only one client now.
+ * Naming is generated once by Dyadpy and carried through `_routes`; React
+ * uses that generated namespace directly.
  */
 
 import {
@@ -27,15 +27,19 @@ import {
   useSuspenseQuery,
 } from "@tanstack/react-query";
 import type {
+  UseMutationResult,
   UseMutationOptions,
   UseQueryOptions,
+  UseQueryResult,
   UseSuspenseQueryOptions,
+  UseSuspenseQueryResult,
 } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { buildNamespaceTree } from "./proxy.js";
-import type { ProxyRouteDescriptor, TreeNode } from "./proxy.js";
+import type { NamespaceEntry, ProxyRouteDescriptor, TreeNode } from "./proxy.js";
 import type { StreamItemOf, SubscriptionStatus } from "./types.js";
+import type { CallOptions, Err } from "@dyadpy/ts";
 
 function makeQueryKey(method: string, args?: unknown): readonly unknown[] {
   return args === undefined ? [method] : [method, args];
@@ -43,6 +47,89 @@ function makeQueryKey(method: string, args?: unknown): readonly unknown[] {
 
 type Unary = (args?: unknown, opts?: { signal?: AbortSignal }) => Promise<unknown>;
 type Stream = (args?: unknown, opts?: { signal?: AbortSignal }) => AsyncIterable<unknown>;
+type AnyRouteFn = (...args: never[]) => unknown;
+type QueryKey = readonly unknown[];
+
+type AwaitedReturn<F> = F extends (...args: never[]) => infer R ? Awaited<R> : never;
+type ResultData<T> = T extends { ok: true; data: infer D } ? D : never;
+type UnwrappedData<F> = [ResultData<AwaitedReturn<F>>] extends [never]
+  ? AwaitedReturn<F>
+  : ResultData<AwaitedReturn<F>>;
+type RouteError<F> = [Err<AwaitedReturn<F>>] extends [never] ? Error : Err<AwaitedReturn<F>>;
+type ParamsOf<F> = F extends (...args: infer P) => unknown ? P : never;
+type FirstParam<F> = ParamsOf<F> extends [infer A, ...unknown[]] ? A : never;
+type HasArgs<F> =
+  ParamsOf<F> extends [] ? false : NonNullable<FirstParam<F>> extends CallOptions ? false : true;
+type ArgsOf<F> = HasArgs<F> extends true ? FirstParam<F> : never;
+type MutationVars<F> = HasArgs<F> extends true ? NonNullable<ArgsOf<F>> : void;
+type QueryOptionInput<F> = Omit<
+  UseQueryOptions<UnwrappedData<F>, RouteError<F>, UnwrappedData<F>, QueryKey>,
+  "queryFn" | "queryKey"
+> & {
+  queryKey?: QueryKey;
+};
+type SuspenseQueryOptionInput<F> = Omit<
+  UseSuspenseQueryOptions<UnwrappedData<F>, RouteError<F>, UnwrappedData<F>, QueryKey>,
+  "queryFn" | "queryKey"
+> & {
+  queryKey?: QueryKey;
+};
+type MutationOptionInput<F> = Omit<
+  UseMutationOptions<UnwrappedData<F>, RouteError<F>, MutationVars<F>>,
+  "mutationFn"
+>;
+
+type WithOptionalArgs<F, TOptions, TResult> =
+  HasArgs<F> extends true
+    ? undefined extends ArgsOf<F>
+      ? (args?: ArgsOf<F>, options?: TOptions) => TResult
+      : (args: ArgsOf<F>, options?: TOptions) => TResult
+    : (options?: TOptions) => TResult;
+
+function splitArgs(
+  hasArgs: boolean,
+  first: unknown,
+  second: unknown,
+): { args: unknown; options: unknown } {
+  return hasArgs ? { args: first, options: second } : { args: undefined, options: first };
+}
+
+export type ReactLeaf<F> = {
+  queryKey: HasArgs<F> extends true
+    ? undefined extends ArgsOf<F>
+      ? (args?: ArgsOf<F>) => QueryKey
+      : (args: ArgsOf<F>) => QueryKey
+    : () => QueryKey;
+  queryOptions: WithOptionalArgs<
+    F,
+    QueryOptionInput<F>,
+    UseQueryOptions<UnwrappedData<F>, RouteError<F>, UnwrappedData<F>, QueryKey>
+  >;
+  useQuery: WithOptionalArgs<
+    F,
+    QueryOptionInput<F>,
+    UseQueryResult<UnwrappedData<F>, RouteError<F>>
+  >;
+  suspenseQueryOptions: WithOptionalArgs<
+    F,
+    SuspenseQueryOptionInput<F>,
+    UseSuspenseQueryOptions<UnwrappedData<F>, RouteError<F>, UnwrappedData<F>, QueryKey>
+  >;
+  useSuspenseQuery: WithOptionalArgs<
+    F,
+    SuspenseQueryOptionInput<F>,
+    UseSuspenseQueryResult<UnwrappedData<F>, RouteError<F>>
+  >;
+  mutationOptions: (
+    options?: MutationOptionInput<F>,
+  ) => Omit<UseMutationOptions<UnwrappedData<F>, RouteError<F>, MutationVars<F>>, "mutationKey">;
+  useMutation: (
+    options?: MutationOptionInput<F>,
+  ) => UseMutationResult<UnwrappedData<F>, RouteError<F>, MutationVars<F>>;
+  useSubscription: F extends (...args: never[]) => AsyncIterable<infer TEvent>
+    ? WithOptionalArgs<F, UseDyadpySubscriptionOptions<TEvent>, UseDyadpySubscriptionResult>
+    : never;
+};
 
 export interface UseDyadpySubscriptionOptions<TEvent> {
   enabled?: boolean;
@@ -57,70 +144,93 @@ export interface UseDyadpySubscriptionResult {
   error: unknown;
 }
 
-/**
- * Permissive default type. The codegen-emitted `Operations` map will eventually
- * pivot through a TypeScript mapped type to give every leaf a tight signature;
- * for now the call surface is `any` and runtime correctness comes from the
- * `_routes` descriptors.
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- nested-proxy default surface
-export type ReactClient = any;
+export type ReactClient<TApi extends object> = {
+  [K in keyof TApi]: TApi[K] extends AnyRouteFn
+    ? ReactLeaf<TApi[K]>
+    : TApi[K] extends object
+      ? ReactClient<TApi[K]>
+      : never;
+};
 
 export function createReactClient<TApi extends object>(
   api: TApi,
   routes: readonly ProxyRouteDescriptor[],
-): ReactClient {
-  // ---- internal flat-shape helpers (closure-scoped; not exported) ----------
+): ReactClient<TApi> {
+  // ---- internal helpers (closure-scoped; not exported) ---------------------
 
-  function makeQueryOptions(method: string, args?: unknown, options?: Partial<UseQueryOptions>) {
+  function makeQueryOptions(
+    entry: NamespaceEntry,
+    args?: unknown,
+    options?: Partial<UseQueryOptions<unknown, unknown, unknown, QueryKey>>,
+  ) {
+    const method = entry.operationName;
     return queryOptions({
       queryKey: options?.queryKey ?? makeQueryKey(method, args),
       ...options,
       queryFn: async ({ signal }) => {
-        const fn = (api as Record<string, unknown>)[method] as Unary;
+        const fn = resolveRouteFn(entry) as Unary;
         return dataOrThrow(await fn(args, { signal }));
       },
     });
   }
 
-  function makeUseQuery(method: string, args?: unknown, options?: Partial<UseQueryOptions>) {
-    return useQuery(makeQueryOptions(method, args, options));
+  function makeUseQuery(
+    entry: NamespaceEntry,
+    args?: unknown,
+    options?: Partial<UseQueryOptions<unknown, unknown, unknown, QueryKey>>,
+  ) {
+    return useQuery(makeQueryOptions(entry, args, options));
   }
 
   function makeSuspenseQueryOptions(
-    method: string,
+    entry: NamespaceEntry,
     args?: unknown,
-    options?: Partial<UseSuspenseQueryOptions>,
+    options?: Partial<UseSuspenseQueryOptions<unknown, unknown, unknown, QueryKey>>,
   ) {
-    return makeQueryOptions(method, args, options as Partial<UseQueryOptions>);
-  }
-
-  function makeUseSuspenseQuery(
-    method: string,
-    args?: unknown,
-    options?: Partial<UseSuspenseQueryOptions>,
-  ) {
-    return useSuspenseQuery(
-      makeSuspenseQueryOptions(method, args, options) as UseSuspenseQueryOptions,
+    return makeQueryOptions(
+      entry,
+      args,
+      options as Partial<UseQueryOptions<unknown, unknown, unknown, QueryKey>>,
     );
   }
 
-  function makeMutationOptions(method: string, options?: Partial<UseMutationOptions>) {
+  function makeUseSuspenseQuery(
+    entry: NamespaceEntry,
+    args?: unknown,
+    options?: Partial<UseSuspenseQueryOptions<unknown, unknown, unknown, QueryKey>>,
+  ) {
+    return useSuspenseQuery(
+      makeSuspenseQueryOptions(entry, args, options) as UseSuspenseQueryOptions<
+        unknown,
+        unknown,
+        unknown,
+        QueryKey
+      >,
+    );
+  }
+
+  function makeMutationOptions(
+    entry: NamespaceEntry,
+    options?: Partial<UseMutationOptions<unknown, unknown, unknown>>,
+  ) {
     return mutationOptions({
       ...options,
       mutationFn: async (vars: unknown) => {
-        const fn = (api as Record<string, unknown>)[method] as Unary;
+        const fn = resolveRouteFn(entry) as Unary;
         return dataOrThrow(await fn(vars));
       },
     });
   }
 
-  function makeUseMutation(method: string, options?: Partial<UseMutationOptions>) {
-    return useMutation(makeMutationOptions(method, options));
+  function makeUseMutation(
+    entry: NamespaceEntry,
+    options?: Partial<UseMutationOptions<unknown, unknown, unknown>>,
+  ) {
+    return useMutation(makeMutationOptions(entry, options));
   }
 
   function makeUseSubscription<TEvent>(
-    method: string,
+    entry: NamespaceEntry,
     args: unknown,
     options: UseDyadpySubscriptionOptions<TEvent>,
   ): UseDyadpySubscriptionResult {
@@ -143,7 +253,7 @@ export function createReactClient<TApi extends object>(
 
       void (async () => {
         try {
-          const fn = (api as Record<string, unknown>)[method] as Stream;
+          const fn = resolveRouteFn(entry) as Stream;
           const iter = fn(args, { signal: controller.signal });
           setStatus("open");
           cb.current.onOpen?.();
@@ -164,7 +274,7 @@ export function createReactClient<TApi extends object>(
 
       return () => controller.abort();
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [enabled, method, argsKey]);
+    }, [enabled, entry, argsKey]);
 
     return { status, error: errorState };
   }
@@ -172,7 +282,7 @@ export function createReactClient<TApi extends object>(
   // ---- proxy assembly ------------------------------------------------------
 
   const tree = buildNamespaceTree(routes);
-  return makeNodeProxy(tree);
+  return makeNodeProxy(tree) as ReactClient<TApi>;
 
   function makeNodeProxy(node: TreeNode): unknown {
     return new Proxy(
@@ -180,7 +290,7 @@ export function createReactClient<TApi extends object>(
       {
         get(_t, prop: string) {
           const leaf = node.leaves.get(prop);
-          if (leaf !== undefined) return makeLeaf(leaf.operationName);
+          if (leaf !== undefined) return makeLeaf(leaf);
           const child = node.children.get(prop);
           if (child !== undefined) return makeNodeProxy(child);
           return undefined;
@@ -195,25 +305,66 @@ export function createReactClient<TApi extends object>(
     );
   }
 
-  function makeLeaf(name: string) {
+  function makeLeaf(entry: NamespaceEntry) {
+    const name = entry.operationName;
     return {
       queryKey: (args?: unknown) => makeQueryKey(name, args),
-      queryOptions: (args?: unknown, options?: Partial<UseQueryOptions>) =>
-        makeQueryOptions(name, args, options),
-      useQuery: (args?: unknown, options?: Partial<UseQueryOptions>) =>
-        makeUseQuery(name, args, options),
-      suspenseQueryOptions: (args?: unknown, options?: Partial<UseSuspenseQueryOptions>) =>
-        makeSuspenseQueryOptions(name, args, options),
-      useSuspenseQuery: (args?: unknown, options?: Partial<UseSuspenseQueryOptions>) =>
-        makeUseSuspenseQuery(name, args, options),
-      mutationOptions: (options?: Partial<UseMutationOptions>) =>
-        makeMutationOptions(name, options),
-      useMutation: (options?: Partial<UseMutationOptions>) => makeUseMutation(name, options),
+      queryOptions: (first?: unknown, second?: unknown) => {
+        const { args, options } = splitArgs(entry.hasArgs, first, second);
+        return makeQueryOptions(
+          entry,
+          args,
+          options as Partial<UseQueryOptions<unknown, unknown, unknown, QueryKey>>,
+        );
+      },
+      useQuery: (first?: unknown, second?: unknown) => {
+        const { args, options } = splitArgs(entry.hasArgs, first, second);
+        return makeUseQuery(
+          entry,
+          args,
+          options as Partial<UseQueryOptions<unknown, unknown, unknown, QueryKey>>,
+        );
+      },
+      suspenseQueryOptions: (first?: unknown, second?: unknown) => {
+        const { args, options } = splitArgs(entry.hasArgs, first, second);
+        return makeSuspenseQueryOptions(
+          entry,
+          args,
+          options as Partial<UseSuspenseQueryOptions<unknown, unknown, unknown, QueryKey>>,
+        );
+      },
+      useSuspenseQuery: (first?: unknown, second?: unknown) => {
+        const { args, options } = splitArgs(entry.hasArgs, first, second);
+        return makeUseSuspenseQuery(
+          entry,
+          args,
+          options as Partial<UseSuspenseQueryOptions<unknown, unknown, unknown, QueryKey>>,
+        );
+      },
+      mutationOptions: (options?: Partial<UseMutationOptions<unknown, unknown, unknown>>) =>
+        makeMutationOptions(entry, options),
+      useMutation: (options?: Partial<UseMutationOptions<unknown, unknown, unknown>>) =>
+        makeUseMutation(entry, options),
       useSubscription: <TEvent = StreamItemOf<unknown>>(
-        args: unknown,
+        first: unknown,
         options: UseDyadpySubscriptionOptions<TEvent>,
-      ) => makeUseSubscription(name, args, options),
+      ) => {
+        const { args, options: subscriptionOptions } = splitArgs(entry.hasArgs, first, options);
+        return makeUseSubscription(
+          entry,
+          args,
+          subscriptionOptions as UseDyadpySubscriptionOptions<TEvent>,
+        );
+      },
     };
+  }
+
+  function resolveRouteFn(entry: NamespaceEntry): unknown {
+    let cursor: unknown = api;
+    for (const segment of entry.segments) {
+      cursor = (cursor as Record<string, unknown> | undefined)?.[segment];
+    }
+    return (cursor as Record<string, unknown> | undefined)?.[entry.verb];
   }
 }
 

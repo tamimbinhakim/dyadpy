@@ -8,8 +8,6 @@ export {
 export {
   buildNamespaceTree,
   computeNamespace,
-  deriveVerb,
-  methodVerb,
   type NamespaceEntry,
   type ProxyRouteDescriptor,
   type TreeNode,

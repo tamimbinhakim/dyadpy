@@ -22,7 +22,7 @@ your Python handlers
 your frontend's src/lib/dyadpy/client.ts
         │
         ▼
-    @dyadpy/ts    (~3 KB runtime, Proxy dispatch + SSE)
+    @dyadpy/ts    (~3 KB runtime, nested dispatch + SSE)
 ```
 
 Two flows: **server start** rebuilds the IR and writes `client.ts`; **at
@@ -94,9 +94,10 @@ Codegen reads an `AppIR` and emits one TypeScript file. The strategy:
   `AsyncIterable<T>` (or, for tagged unions, the narrowed shape).
 - **Errors**: `@raises(A, B)` becomes `Result<T, A | B>`. The client is
   forced to handle the typed cases.
-- **The client object**: a `createClient({ routes: [...] })` call followed
-  by a thin `Proxy` so calls like `api.users.get` are synthesized at runtime
-  from the route table — but the _types_ are static.
+- **The client object**: a `createClient<ApiRoutes>({ routes: [...] })`
+  call builds the same nested object that `ApiRoutes` describes, so calls
+  like `api.users.byId` are static in TypeScript and real properties at
+  runtime.
 
 The output is **one** file. Not a `client/` directory. Not 12 `*.types.ts`
 files. One file you import.
@@ -116,8 +117,8 @@ Everything is logged with `rich` so the terminal stays readable.
 
 The runtime is ~3 KB min+gz. It exports:
 
-- `createClient(config)` → a `Proxy` that dispatches `api.<name>(...)` to
-  the matching route in the config.
+- `createClient<TApi>(config)` → a nested object that dispatches
+  `api.<namespace>.<verb>(...)` to the matching route in the config.
 - `parseSSE(stream)` → a minimal SSE parser. Used by the generated client
   to turn `fetch().body` into a typed `AsyncIterable<TEvent>`.
 - `Result<T, E>` / `Ok<R>` / `Err<R>` → the envelope type and the helpers
@@ -146,10 +147,10 @@ most server-push protocols have standardized on it. WS opens you up to
 bidirectional state-management complexity that most apps don't need. WS is
 on the roadmap (`bidi[Send, Recv]`) for the cases that actually want it.
 
-**Why a Proxy client instead of generated functions?**
-Same reason tRPC does it: the dot path is the only API surface to learn,
-and the types come from the generated `.d.ts` for free. We avoid
-hand-writing (or generating) one function per endpoint.
+**Why a route table instead of generated fetch functions?**
+The generated file stays small: static interfaces describe the nested dot
+path, while the route table lets the runtime build the matching object and
+share one request implementation for JSON, forms, files, bytes, and SSE.
 
 ## Where to read the code
 

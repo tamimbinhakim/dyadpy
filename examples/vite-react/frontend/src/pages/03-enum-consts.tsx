@@ -12,7 +12,7 @@ export function EnumConsts() {
   const [out, setOut] = useState("Click to create.");
 
   async function go() {
-    const result = await api.createIssue(
+    const result = await api.issues.create(
       {
         data: {
           title: "Demo issue",

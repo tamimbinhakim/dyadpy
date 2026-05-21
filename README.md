@@ -36,7 +36,7 @@ async def get_user(user_id: int) -> User:
 // frontend/anywhere.tsx
 import { api } from "@/lib/dyadpy/client";
 
-const user = await api.getUser({ userId: 1 });
+const user = await api.users.byId({ userId: 1 });
 //    ^? User — full type, autocomplete, refactor-safe
 ```
 
@@ -45,7 +45,7 @@ That's the whole loop. `dyadpy dev` rewrites `client.ts` every time you save Pyt
 ## Why you'd use it
 
 - **Zero DTO duplication.** Your Python function signature _is_ the API contract. No `class CreatePostRequest(BaseModel)` mirrored in three files.
-- **Method names that don't make you cry.** `api.getUser(...)` — not `createPostPostsPost`.
+- **Nested route calls that read like resources.** `api.users.byId(...)` — not `createPostPostsPost`.
 - **Typed streaming out of the box.** `stream[T]` becomes `AsyncIterable<T>` on the client, with auto-reconnect on drop.
 - **Typed errors as discriminated unions.** `@raises(NotFound, Forbidden)` → `Result<T, NotFound | Forbidden>`. The compiler forces you to handle each case.
 - **One file, not twelve.** The generated client is a single `client.ts` you can read, diff, and grep.
@@ -80,8 +80,8 @@ async def create_order(order: NewOrder) -> Order: ...
 ```
 
 ```ts
-api.cr|
-//   ^ createOrder  ← appears the moment you save Python
+api.orders.cr|
+//         ^ create ← appears the moment you save Python
 ```
 
 **Errors as discriminated unions — forget a case, get a compile error.**
@@ -92,7 +92,7 @@ async def get_user(user_id: int) -> User: ...
 ```
 
 ```ts
-const result = await api.getUser({ userId: 1 });
+const result = await api.users.byId({ userId: 1 });
 if (!result.ok) {
   switch (result.error.kind) {
     case "NotFound":
@@ -112,7 +112,7 @@ async def watch_build(id: int) -> stream[BuildLog]: ...
 ```
 
 ```ts
-for await (const log of api.watchBuild({ id: 42 })) {
+for await (const log of api.build.events.list({ id: 42 })) {
   log.level; // "info" | "warn" | "error" — autocomplete works
 }
 ```

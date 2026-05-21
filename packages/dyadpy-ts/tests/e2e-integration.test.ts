@@ -13,12 +13,16 @@ const ROUTES = [
     method: "GET",
     path: "/me",
     name: "me",
+    segments: ["me"],
+    verb: "list",
     params: [{ name: "authorization", alias: "authorization", in: "header" }],
   },
   {
     method: "GET",
     path: "/posts/{post_id}",
     name: "getPost",
+    segments: ["posts"],
+    verb: "byId",
     params: [{ name: "postId", alias: "post_id", in: "path" }],
     result: true,
   },
@@ -26,24 +30,32 @@ const ROUTES = [
     method: "POST",
     path: "/posts",
     name: "createPost",
+    segments: ["posts"],
+    verb: "create",
     params: [{ name: "data", alias: "data", in: "body" }],
   },
   {
     method: "GET",
     path: "/posts",
     name: "listPosts",
+    segments: ["posts"],
+    verb: "list",
     params: [{ name: "tag", alias: "tag", in: "query" }],
   },
   {
     method: "POST",
     path: "/avatar",
     name: "uploadAvatar",
+    segments: ["avatar"],
+    verb: "create",
     params: [{ name: "file", alias: "file", in: "file" }],
   },
   {
     method: "POST",
     path: "/login",
     name: "login",
+    segments: ["login"],
+    verb: "create",
     params: [{ name: "form", alias: "form", in: "body" }],
     formBody: true,
   },
@@ -51,6 +63,8 @@ const ROUTES = [
     method: "POST",
     path: "/webhooks/stripe",
     name: "stripeWebhook",
+    segments: ["webhooks", "stripe"],
+    verb: "create",
     params: [{ name: "body", alias: "body", in: "body" }],
     binaryBody: true,
   },
@@ -58,6 +72,8 @@ const ROUTES = [
     method: "GET",
     path: "/exports/{id}.csv",
     name: "exportCsv",
+    segments: ["exports", "csv"],
+    verb: "byId",
     params: [{ name: "id", alias: "id", in: "path" }],
     binaryResponse: true,
   },
@@ -65,30 +81,52 @@ const ROUTES = [
     method: "GET",
     path: "/feed",
     name: "feed",
+    segments: ["feed"],
+    verb: "list",
     params: [{ name: "count", alias: "count", in: "query" }],
     streams: true,
   },
 ] as const satisfies ReadonlyArray<RouteDescriptor>;
 
 type Api = {
-  me: (a: { authorization: string }) => Promise<{ id: number; email: string; createdAt: string }>;
-  getPost: (a: {
-    postId: number;
-  }) => Promise<
-    { ok: true; data: { id: number; authorId: number } } | { ok: false; error: { kind: string } }
-  >;
-  createPost: (a: { data: { title: string; bodyText: string } }) => Promise<{ id: number }>;
-  listPosts: (a?: { tag?: string[] }) => Promise<Array<{ id: number }>>;
-  uploadAvatar: (a: { file: Blob }) => Promise<{ bytes: number }>;
-  login: (a: {
-    form: { email: string; password: string };
-  }) => Promise<{ token: string; userId: number }>;
-  stripeWebhook: (a: { body: Uint8Array }) => Promise<unknown>;
-  exportCsv: (a: { id: string }) => Promise<Blob>;
-  feed: (
-    a: { count: number },
-    opts?: { signal?: AbortSignal },
-  ) => AsyncIterable<{ kind: "tick"; seq: number } | { kind: "done"; total: number }>;
+  me: {
+    list: (a: {
+      authorization: string;
+    }) => Promise<{ id: number; email: string; createdAt: string }>;
+  };
+  posts: {
+    byId: (a: {
+      postId: number;
+    }) => Promise<
+      { ok: true; data: { id: number; authorId: number } } | { ok: false; error: { kind: string } }
+    >;
+    create: (a: { data: { title: string; bodyText: string } }) => Promise<{ id: number }>;
+    list: (a?: { tag?: string[] }) => Promise<Array<{ id: number }>>;
+  };
+  avatar: {
+    create: (a: { file: Blob }) => Promise<{ bytes: number }>;
+  };
+  login: {
+    create: (a: {
+      form: { email: string; password: string };
+    }) => Promise<{ token: string; userId: number }>;
+  };
+  webhooks: {
+    stripe: {
+      create: (a: { body: Uint8Array }) => Promise<unknown>;
+    };
+  };
+  exports: {
+    csv: {
+      byId: (a: { id: string }) => Promise<Blob>;
+    };
+  };
+  feed: {
+    list: (
+      a: { count: number },
+      opts?: { signal?: AbortSignal },
+    ) => AsyncIterable<{ kind: "tick"; seq: number } | { kind: "done"; total: number }>;
+  };
 };
 
 function makeServer(): { fetch: FetchImpl; calls: Request[] } {
@@ -196,13 +234,13 @@ function json(body: unknown): Response {
 describe("e2e integration — generated-client surface against a Dyadpy-shaped mock server", () => {
   it("unary GET with header param + snake→camel response translation", async () => {
     const server = makeServer();
-    const api = createClient({
+    const api = createClient<Api>({
       routes: ROUTES,
       fetch: server.fetch,
       baseUrl: "http://test",
-    }) as Api;
+    });
 
-    const me = await api.me({ authorization: "Bearer tok" });
+    const me = await api.me.list({ authorization: "Bearer tok" });
     expect(me).toEqual({ id: 1, email: "a@x.com", createdAt: "2025-01-01" });
 
     expect(server.calls[0]!.headers.get("authorization")).toBe("Bearer tok");
@@ -210,26 +248,26 @@ describe("e2e integration — generated-client surface against a Dyadpy-shaped m
 
   it("path-param GET with Result envelope (ok branch)", async () => {
     const server = makeServer();
-    const api = createClient({
+    const api = createClient<Api>({
       routes: ROUTES,
       fetch: server.fetch,
       baseUrl: "http://test",
-    }) as Api;
+    });
 
-    const r = await api.getPost({ postId: 42 });
+    const r = await api.posts.byId({ postId: 42 });
     expect(r.ok).toBe(true);
     if (r.ok) expect(r.data).toEqual({ id: 42, authorId: 7 });
   });
 
   it("path-param GET with Result envelope (err branch — typed)", async () => {
     const server = makeServer();
-    const api = createClient({
+    const api = createClient<Api>({
       routes: ROUTES,
       fetch: server.fetch,
       baseUrl: "http://test",
-    }) as Api;
+    });
 
-    const r = await api.getPost({ postId: 404 });
+    const r = await api.posts.byId({ postId: 404 });
     expect(r.ok).toBe(false);
     if (!r.ok) {
       expect((r.error as { kind: string }).kind).toBe("PostNotFound");
@@ -239,13 +277,13 @@ describe("e2e integration — generated-client surface against a Dyadpy-shaped m
 
   it("POST body with camel→snake translation", async () => {
     const server = makeServer();
-    const api = createClient({
+    const api = createClient<Api>({
       routes: ROUTES,
       fetch: server.fetch,
       baseUrl: "http://test",
-    }) as Api;
+    });
 
-    const r = await api.createPost({ data: { title: "hi", bodyText: "world" } });
+    const r = await api.posts.create({ data: { title: "hi", bodyText: "world" } });
     expect(r).toEqual({ id: 1 });
     const req = server.calls[0]!;
     expect(req.headers.get("content-type")).toContain("application/json");
@@ -253,13 +291,13 @@ describe("e2e integration — generated-client surface against a Dyadpy-shaped m
 
   it("repeated query param expands to `?tag=a&tag=b`", async () => {
     const server = makeServer();
-    const api = createClient({
+    const api = createClient<Api>({
       routes: ROUTES,
       fetch: server.fetch,
       baseUrl: "http://test",
-    }) as Api;
+    });
 
-    const r = await api.listPosts({ tag: ["red", "blue"] });
+    const r = await api.posts.list({ tag: ["red", "blue"] });
     expect(r).toEqual([
       { id: 1, tag: "red" },
       { id: 2, tag: "blue" },
@@ -270,14 +308,14 @@ describe("e2e integration — generated-client surface against a Dyadpy-shaped m
 
   it("multipart file upload uses FormData and lets fetch pick the boundary", async () => {
     const server = makeServer();
-    const api = createClient({
+    const api = createClient<Api>({
       routes: ROUTES,
       fetch: server.fetch,
       baseUrl: "http://test",
-    }) as Api;
+    });
 
     const blob = new Blob([new Uint8Array([1, 2, 3, 4, 5])]);
-    const r = await api.uploadAvatar({ file: blob });
+    const r = await api.avatar.create({ file: blob });
     expect(r).toEqual({ bytes: 5 });
     expect(server.calls[0]!.headers.get("content-type")).toMatch(
       /^multipart\/form-data; boundary=/,
@@ -286,39 +324,39 @@ describe("e2e integration — generated-client surface against a Dyadpy-shaped m
 
   it("formBody routes encode as application/x-www-form-urlencoded with snake_case keys", async () => {
     const server = makeServer();
-    const api = createClient({
+    const api = createClient<Api>({
       routes: ROUTES,
       fetch: server.fetch,
       baseUrl: "http://test",
-    }) as Api;
+    });
 
-    const r = await api.login({ form: { email: "a@x.com", password: "hunter2" } });
+    const r = await api.login.create({ form: { email: "a@x.com", password: "hunter2" } });
     expect(r.token).toBe("tok-1");
     expect(r.userId).toBe(1);
   });
 
   it("binaryBody routes pass raw bytes through unmodified", async () => {
     const server = makeServer();
-    const api = createClient({
+    const api = createClient<Api>({
       routes: ROUTES,
       fetch: server.fetch,
       baseUrl: "http://test",
-    }) as Api;
+    });
 
     const payload = new Uint8Array([222, 173, 190, 239]);
-    const r = (await api.stripeWebhook({ body: payload })) as { bytes: number };
+    const r = (await api.webhooks.stripe.create({ body: payload })) as { bytes: number };
     expect(r.bytes).toBe(4);
   });
 
   it("binaryResponse routes hand back a Blob", async () => {
     const server = makeServer();
-    const api = createClient({
+    const api = createClient<Api>({
       routes: ROUTES,
       fetch: server.fetch,
       baseUrl: "http://test",
-    }) as Api;
+    });
 
-    const blob = await api.exportCsv({ id: "abc" });
+    const blob = await api.exports.csv.byId({ id: "abc" });
     expect(blob).toBeInstanceOf(Blob);
     const text = await blob.text();
     expect(text).toContain("a,b,c");
@@ -326,14 +364,14 @@ describe("e2e integration — generated-client surface against a Dyadpy-shaped m
 
   it("streaming route parses SSE frames into AsyncIterable<T>", async () => {
     const server = makeServer();
-    const api = createClient({
+    const api = createClient<Api>({
       routes: ROUTES,
       fetch: server.fetch,
       baseUrl: "http://test",
-    }) as Api;
+    });
 
     const seen: unknown[] = [];
-    for await (const ev of api.feed({ count: 3 })) {
+    for await (const ev of api.feed.list({ count: 3 })) {
       seen.push(ev);
     }
     expect(seen).toEqual([
@@ -369,10 +407,10 @@ describe("e2e integration — generated-client surface against a Dyadpy-shaped m
       });
     };
 
-    const api = createClient({ routes: ROUTES, fetch: slowFetch, baseUrl: "http://test" }) as Api;
+    const api = createClient<Api>({ routes: ROUTES, fetch: slowFetch, baseUrl: "http://test" });
     const ac = new AbortController();
     const seen: unknown[] = [];
-    for await (const ev of api.feed({ count: 100 }, { signal: ac.signal })) {
+    for await (const ev of api.feed.list({ count: 100 }, { signal: ac.signal })) {
       seen.push(ev);
       if (seen.length >= 3) ac.abort();
     }

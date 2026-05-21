@@ -342,11 +342,9 @@ def test_codegen_for_smoke_app_renders_every_section(app: App) -> None:
     assert 'from "@dyadpy/ts"' in out
     assert "Result," in out
 
-    assert "// ── Domain types" in out
-    assert "// ── Errors" in out
-    assert "// ── Enum value-objects" in out
-    assert "// ── Client" in out
-    assert "// ── Per-route type aliases" in out
+    assert "export interface ApiRoutes" in out
+    assert "export const _routes: ReadonlyArray<RouteDescriptor>" in out
+    assert "export namespace Routes" in out
 
     for name in ("User", "CreatePost", "Post", "Session", "LoginForm", "Tick", "Done"):
         assert f"export type {name}" in out, f"missing domain type {name}"
@@ -354,18 +352,19 @@ def test_codegen_for_smoke_app_renders_every_section(app: App) -> None:
     assert "export type Forbidden" in out
     assert "export type PostNotFound" in out
 
-    for method in (
-        "login(",
-        "me(",
-        "createPost(",
-        "getPost(",
-        "listPosts(",
-        "uploadAvatar(",
-        "feed(",
-        "health(",
-        "preferences(",
+    for route_shape in (
+        "login: {",
+        "me: {",
+        "posts: {",
+        "create(",
+        "byId(",
+        "list(",
+        "avatar: {",
+        "feed: {",
+        "health: {",
+        "preferences: {",
     ):
-        assert method in out, f"missing method {method}"
+        assert route_shape in out, f"missing route shape {route_shape}"
 
     for ns in (
         "export namespace login",

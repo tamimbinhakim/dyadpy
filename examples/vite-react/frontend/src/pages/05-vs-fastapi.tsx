@@ -60,7 +60,7 @@ const DYADPY_CODE = `// dyadpy-server side:
 import { api } from "@/lib/dyadpy/client";          // 4 KB, one file
 
 async function load(issueId: number) {
-  const result = await api.getIssue(               // method, not path string
+  const result = await api.issues.byId(            // nested resource call
     { issueId },                                   // camelCase, generated
     { headers: { authorization: "Bearer 1" } },
   );
@@ -82,7 +82,7 @@ export function VsFastapi() {
   const [out, setOut] = useState("Click 'run live' to call the Dyadpy path.");
 
   async function go() {
-    const result = await api.getIssue({ issueId: 999 }, { headers: AUTH });
+    const result = await api.issues.byId({ issueId: 999 }, { headers: AUTH });
     if (result.ok) {
       setOut(`✓ ${result.data.title}`);
       return;
@@ -131,7 +131,7 @@ export function VsFastapi() {
           title="Dyadpy"
           tone="#2a8049"
           summary={[
-            "✓  Method named like a function: api.getIssue(...).",
+            "✓  Nested resource call: api.issues.byId(...).",
             "✓  Args are camelCase, wire stays snake_case — translated for you.",
             "✓  result.data is Issue once result.ok narrows the union.",
             "✓  result.error.kind is the discriminator — switch narrows each branch.",
@@ -144,7 +144,8 @@ export function VsFastapi() {
       <div style={{ display: "flex", gap: 8, marginTop: 16, alignItems: "center" }}>
         <button onClick={go}>run live (Dyadpy path)</button>
         <span style={{ color: "#888", fontSize: 13 }}>
-          Calls <code>api.getIssue(&#123; issueId: 999 &#125;)</code> against this example's server.
+          Calls <code>api.issues.byId(&#123; issueId: 999 &#125;)</code> against this example's
+          server.
         </span>
       </div>
       <pre style={{ background: "#f5f5f5", padding: 12, marginTop: 12 }}>{out}</pre>

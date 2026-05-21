@@ -62,8 +62,8 @@ export default function JobPage({ params }: { params: { id: string } }) {
   useEffect(() => {
     const ac = new AbortController();
     (async () => {
-      for await (const ev of api.watch_job(
-        { job_id: params.id },
+      for await (const ev of api.jobs.events.list(
+        { jobId: params.id },
         { signal: ac.signal },
       )) {
         if (ev.kind === "progress") setPct((ev.step / ev.total) * 100);

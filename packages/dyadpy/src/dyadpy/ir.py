@@ -337,14 +337,16 @@ def _rewrite_refs(value: Any, renames: dict[str, str]) -> Any:
         return value
     if isinstance(value, dict):
         rewritten: dict[str, Any] = {}
-        for key, item in value.items():
+        obj = cast("dict[str, Any]", value)
+        for key, item in obj.items():
             if key == "$ref" and isinstance(item, str):
                 rewritten[key] = _rewrite_ref(item, renames)
             else:
                 rewritten[key] = _rewrite_refs(item, renames)
         return rewritten
     if isinstance(value, list):
-        return [_rewrite_refs(item, renames) for item in value]
+        items = cast("list[Any]", value)  # type: ignore[redundant-cast]
+        return [_rewrite_refs(item, renames) for item in items]
     return value
 
 

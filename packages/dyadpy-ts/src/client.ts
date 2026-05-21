@@ -4,24 +4,37 @@ import type { CallOptions, ClientConfig, Result, RouteDescriptor } from "./types
 type Args = Record<string, unknown>;
 type FetchImpl = typeof globalThis.fetch;
 
-export function createClient(config: ClientConfig): unknown {
+export function createClient<TApi extends object = Record<string, unknown>>(
+  config: ClientConfig,
+): TApi {
   const baseUrl = (config.baseUrl ?? "").replace(/\/$/, "");
   const fetchImpl: FetchImpl = config.fetch ?? globalThis.fetch.bind(globalThis);
-  const byName = new Map<string, RouteDescriptor>(config.routes.map((r) => [r.name, r]));
+  const root: Record<string, unknown> = Object.create(null);
 
-  return new Proxy(Object.create(null) as Record<string, unknown>, {
-    get(_target, prop: string) {
-      const route = byName.get(prop);
-      if (!route) return undefined;
-      return (args?: Args, opts: CallOptions = {}) => {
-        if (route.streams) {
-          return streamCall(route, args ?? {}, opts, baseUrl, config.headers, fetchImpl);
-        }
-        const { url, init } = buildRequest(route, args ?? {}, opts, baseUrl, config.headers);
-        return unaryCall(route, url, init, fetchImpl);
-      };
-    },
-  });
+  for (const route of config.routes) {
+    const fn = (args?: Args, opts: CallOptions = {}) => {
+      if (route.streams) {
+        return streamCall(route, args ?? {}, opts, baseUrl, config.headers, fetchImpl);
+      }
+      const { url, init } = buildRequest(route, args ?? {}, opts, baseUrl, config.headers);
+      return unaryCall(route, url, init, fetchImpl);
+    };
+
+    let cursor = root;
+    for (const segment of route.segments) {
+      const existing = cursor[segment];
+      if (existing && typeof existing === "object") {
+        cursor = existing as Record<string, unknown>;
+      } else {
+        const child: Record<string, unknown> = Object.create(null);
+        cursor[segment] = child;
+        cursor = child;
+      }
+    }
+    cursor[route.verb] = fn;
+  }
+
+  return root as TApi;
 }
 
 function buildRequest(

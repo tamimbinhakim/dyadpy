@@ -8,18 +8,24 @@ const routes: RouteDescriptor[] = [
     method: "GET",
     path: "/users/{user_id}",
     name: "getUser",
+    segments: ["users"],
+    verb: "byId",
     params: [{ name: "userId", alias: "user_id", in: "path" }],
   },
   {
     method: "POST",
     path: "/posts",
     name: "createPost",
+    segments: ["posts"],
+    verb: "create",
     params: [{ name: "data", alias: "data", in: "body" }],
   },
   {
     method: "GET",
     path: "/search",
     name: "search",
+    segments: ["search"],
+    verb: "list",
     params: [
       { name: "q", alias: "q", in: "query" },
       { name: "limit", alias: "limit", in: "query" },
@@ -29,6 +35,8 @@ const routes: RouteDescriptor[] = [
     method: "POST",
     path: "/login",
     name: "login",
+    segments: ["login"],
+    verb: "create",
     params: [
       { name: "email", alias: "email", in: "body", embed: true },
       { name: "password", alias: "password", in: "body", embed: true },
@@ -38,6 +46,8 @@ const routes: RouteDescriptor[] = [
     method: "GET",
     path: "/orphan",
     name: "orphan",
+    segments: ["orphan"],
+    verb: "list",
     result: true,
   },
 ];
@@ -46,10 +56,17 @@ function makeFetch(responder: () => Response) {
   return vi.fn<typeof fetch>(async () => responder());
 }
 
-type AnyApi = Record<
-  string,
-  (args?: Record<string, unknown>, opts?: { signal?: AbortSignal }) => Promise<unknown>
->;
+type ApiLeaf = (
+  args?: Record<string, unknown>,
+  opts?: { signal?: AbortSignal },
+) => Promise<unknown>;
+type NestedApi = {
+  users: { byId: ApiLeaf };
+  posts: { create: ApiLeaf };
+  search: { list: ApiLeaf };
+  login: { create: ApiLeaf };
+  orphan: { list: ApiLeaf };
+};
 
 describe("createClient", () => {
   it("returns undefined for unknown method names", () => {
@@ -60,6 +77,29 @@ describe("createClient", () => {
     expect(api.nope).toBeUndefined();
   });
 
+  it("exposes generated nested namespace leaves", async () => {
+    const fetchMock = makeFetch(
+      () =>
+        new Response(JSON.stringify({ id: 1 }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    );
+    const api = createClient<NestedApi>({
+      baseUrl: "http://api.test",
+      routes,
+      fetch: fetchMock,
+    });
+
+    const result = await api.users.byId({ userId: 42 });
+
+    const [url] = fetchMock.mock.calls[0]!;
+    expect(url).toBe("http://api.test/users/42");
+    expect(result).toEqual({ id: 1 });
+    expect(Object.keys(api)).toContain("users");
+    expect(Object.keys(api)).not.toContain("getUser");
+  });
+
   it("substitutes path params via alias", async () => {
     const fetchMock = makeFetch(
       () =>
@@ -68,13 +108,13 @@ describe("createClient", () => {
           headers: { "content-type": "application/json" },
         }),
     );
-    const api = createClient({
+    const api = createClient<NestedApi>({
       baseUrl: "http://api.test",
       routes,
       fetch: fetchMock,
-    }) as AnyApi;
+    });
 
-    const result = await api.getUser!({ userId: 42 });
+    const result = await api.users.byId({ userId: 42 });
 
     const [url, init] = fetchMock.mock.calls[0]!;
     expect(url).toBe("http://api.test/users/42");
@@ -90,13 +130,13 @@ describe("createClient", () => {
           headers: { "content-type": "application/json" },
         }),
     );
-    const api = createClient({
+    const api = createClient<NestedApi>({
       baseUrl: "http://api.test",
       routes,
       fetch: fetchMock,
-    }) as AnyApi;
+    });
 
-    await api.createPost!({ data: { titleText: "hi", bodyText: "world" } });
+    await api.posts.create({ data: { titleText: "hi", bodyText: "world" } });
 
     const [, init] = fetchMock.mock.calls[0]!;
     expect(JSON.parse(init?.body as string)).toEqual({
@@ -113,13 +153,13 @@ describe("createClient", () => {
           headers: { "content-type": "application/json" },
         }),
     );
-    const api = createClient({
+    const api = createClient<NestedApi>({
       baseUrl: "http://api.test",
       routes,
       fetch: fetchMock,
-    }) as AnyApi;
+    });
 
-    await api.login!({ email: "a@b.com", password: "secret" });
+    await api.login.create({ email: "a@b.com", password: "secret" });
 
     const [, init] = fetchMock.mock.calls[0]!;
     expect(JSON.parse(init?.body as string)).toEqual({
@@ -136,13 +176,13 @@ describe("createClient", () => {
           headers: { "content-type": "application/json" },
         }),
     );
-    const api = createClient({
+    const api = createClient<NestedApi>({
       baseUrl: "http://api.test",
       routes,
       fetch: fetchMock,
-    }) as AnyApi;
+    });
 
-    await api.search!({ q: "hi", limit: 5 });
+    await api.search.list({ q: "hi", limit: 5 });
 
     const [url] = fetchMock.mock.calls[0]!;
     expect(url).toBe("http://api.test/search?q=hi&limit=5");
@@ -156,8 +196,8 @@ describe("createClient", () => {
           headers: { "content-type": "application/json" },
         }),
     );
-    const api = createClient({ routes, fetch: fetchMock }) as AnyApi;
-    const got = await api.getUser!({ userId: 7 });
+    const api = createClient<NestedApi>({ routes, fetch: fetchMock });
+    const got = await api.users.byId({ userId: 7 });
     expect(got).toEqual({ userId: 7, fullName: "Ada" });
   });
 
@@ -170,22 +210,22 @@ describe("createClient", () => {
           headers: { "content-type": "application/json" },
         }),
     );
-    const api = createClient({
+    const api = createClient<NestedApi>({
       routes,
       fetch: fetchMock,
-    }) as AnyApi;
+    });
 
-    const got = await api.orphan!();
+    const got = await api.orphan.list();
     expect(got).toEqual({ ok: false, error: { kind: "PostNotFound", postId: 7 } });
   });
 
   it("throws a structured error on non-2xx", async () => {
     const fetchMock = makeFetch(() => new Response("boom", { status: 500 }));
-    const api = createClient({
+    const api = createClient<NestedApi>({
       routes,
       fetch: fetchMock,
-    }) as AnyApi;
+    });
 
-    await expect(api.getUser!({ userId: 1 })).rejects.toMatchObject({ status: 500 });
+    await expect(api.users.byId({ userId: 1 })).rejects.toMatchObject({ status: 500 });
   });
 });

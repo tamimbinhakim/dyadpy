@@ -8,6 +8,8 @@ const routes: RouteDescriptor[] = [
     method: "GET",
     path: "/chat",
     name: "chat",
+    segments: ["chat"],
+    verb: "list",
     streams: true,
   },
 ];
@@ -40,11 +42,11 @@ describe("streaming client", () => {
     );
 
     const api = createClient({ routes, fetch: fetchMock }) as {
-      chat: () => AsyncIterable<{ kind: string; text?: string }>;
+      chat: { list: () => AsyncIterable<{ kind: string; text?: string }> };
     };
 
     const got: unknown[] = [];
-    for await (const ev of api.chat()) got.push(ev);
+    for await (const ev of api.chat.list()) got.push(ev);
 
     expect(got).toEqual([
       { kind: "token", text: "hi" },
@@ -64,11 +66,11 @@ describe("streaming client", () => {
     );
 
     const api = createClient({ routes, fetch: fetchMock }) as {
-      chat: () => AsyncIterable<unknown>;
+      chat: { list: () => AsyncIterable<unknown> };
     };
 
     const run = async () => {
-      for await (const ev of api.chat()) {
+      for await (const ev of api.chat.list()) {
         void ev;
       }
     };
@@ -106,10 +108,10 @@ describe("streaming client", () => {
     });
 
     const api = createClient({ routes, fetch: fetchMock }) as {
-      chat: () => AsyncIterable<{ n: number }>;
+      chat: { list: () => AsyncIterable<{ n: number }> };
     };
     const got: number[] = [];
-    for await (const ev of api.chat()) got.push(ev.n);
+    for await (const ev of api.chat.list()) got.push(ev.n);
 
     expect(got).toEqual([1, 2, 3]);
     expect(calls).toHaveLength(2);

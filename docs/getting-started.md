@@ -78,14 +78,16 @@ dyadpy codegen server.app:app --out ../frontend/src/lib/dyadpy/client.ts
 // frontend/src/app/page.tsx
 import { api } from "@/lib/dyadpy/client";
 
-const post = await api.createPost({ data: { title: "first", body: "hello" } });
+const post = await api.posts.create({
+  data: { title: "first", body: "hello" },
+});
 //    ^? Post
 
-const got = await api.getPost({ postId: post.id });
+const got = await api.posts.byId({ postId: post.id });
 console.log(got.title);
 ```
 
-Hover `api.createPost` in your editor. Return type: `Post`. Param type: `CreatePost`. Pass `{ title: 123 }` and TypeScript yells at you before you hit save.
+Hover `api.posts.create` in your editor. Return type: `Post`. Param type: `CreatePost`. Pass `{ title: 123 }` and TypeScript yells at you before you hit save.
 
 ## 5. Streaming
 
@@ -112,7 +114,7 @@ async def ticks(count: int) -> stream[Tick | Done]:
 
 ```ts
 const ac = new AbortController();
-for await (const ev of api.ticks({ count: 10 }, { signal: ac.signal })) {
+for await (const ev of api.ticks.list({ count: 10 }, { signal: ac.signal })) {
   if (ev.kind === "tick") console.log("tick", ev.seq);
   else if (ev.kind === "done") console.log("finished", ev.total);
 }
@@ -139,7 +141,7 @@ async def get_post(post_id: int) -> Post:
 ```
 
 ```ts
-const result = await api.getPost({ postId: 42 });
+const result = await api.posts.byId({ postId: 42 });
 if (result.ok) {
   console.log(result.data.title);
 } else if (result.error.kind === "PostNotFound") {

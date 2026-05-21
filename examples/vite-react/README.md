@@ -59,19 +59,19 @@ import { useEffect, useState } from "react";
 
 export default function App() {
   const [posts, setPosts] = useState<
-    Awaited<ReturnType<typeof api.list_posts>>
+    Awaited<ReturnType<typeof api.posts.list>>
   >([]);
 
   useEffect(() => {
-    api.list_posts().then(setPosts);
+    api.posts.list().then(setPosts);
   }, []);
 
   async function load(id: number) {
-    const result = await api.get_post({ post_id: id });
+    const result = await api.posts.byId({ postId: id });
     if (result.ok) {
       console.log(result.data.title);
     } else if (result.error.kind === "PostNotFound") {
-      alert(`No post with id ${result.error.post_id}`);
+      alert(`No post with id ${result.error.postId}`);
     }
   }
 

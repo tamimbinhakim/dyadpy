@@ -5,10 +5,9 @@ from __future__ import annotations
 import json
 import keyword
 import re
-import textwrap
 from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, TypedDict, cast
 
 from dyadpy._idents import to_camel as _to_camel
 from dyadpy.ir import AppIR, ParamIR, RouteIR
@@ -49,6 +48,7 @@ def render(ir: AppIR) -> str:
 
     name_map = _disambiguate(ir.components.keys())
     route_names = _route_ts_names(ir)
+    route_tree = _route_namespace_tree(ir, route_names)
     error_names = {e.name for r in ir.routes for e in r.raises}
 
     domain_keys = sorted(k for k in ir.components if name_map[k] not in error_names)
@@ -68,13 +68,13 @@ def render(ir: AppIR) -> str:
         parts.append(enum_block)
 
     parts.append(_section())
-    parts.append(_render_api_interface(ir, name_map, route_names))
+    parts.append(_render_api_interface(ir, name_map, route_tree))
     parts.append("\n")
-    parts.append(_render_route_table(ir, route_names))
+    parts.append(_render_route_table(ir, route_names, route_tree))
     parts.append(
         '\nexport type ApiClientOptions = Omit<ClientConfig, "routes">;\n\n'
         "export function createApi(options: ApiClientOptions = {}): ApiRoutes {\n"
-        "  return createClient({ ...options, routes: _routes }) as ApiRoutes;\n"
+        "  return createClient<ApiRoutes>({ ...options, routes: _routes });\n"
         "}\n\n"
         "export const api = createApi();\n",
     )
@@ -96,27 +96,62 @@ def _render_components(keys: list[str], ir: AppIR, name_map: dict[str, str]) -> 
     return "\n".join(chunks)
 
 
+class _NamespaceEntry(TypedDict):
+    route_index: int
+    segments: list[str]
+    verb: str
+    operation_name: str
+
+
+class _NamespaceNode(TypedDict):
+    children: dict[str, _NamespaceNode]
+    leaves: dict[str, _NamespaceEntry]
+
+
+def _new_namespace_node() -> _NamespaceNode:
+    return {"children": {}, "leaves": {}}
+
+
 def _render_api_interface(
     ir: AppIR,
     name_map: dict[str, str],
-    route_names: dict[int, str],
+    route_tree: _NamespaceNode,
 ) -> str:
     lines = ["export interface ApiRoutes {\n"]
-    for i, route in enumerate(ir.routes):
-        if i > 0:
-            lines.append("\n")
-        lines.append("  " + _render_method_signature(route, name_map, route_names[i]) + "\n")
+    lines.extend(_render_api_node(route_tree, ir, name_map, indent="  "))
     lines.append("}\n")
     return "".join(lines)
 
 
-def _render_route_table(ir: AppIR, route_names: dict[int, str]) -> str:
+def _render_api_node(
+    node: _NamespaceNode,
+    ir: AppIR,
+    name_map: dict[str, str],
+    *,
+    indent: str,
+) -> list[str]:
+    lines: list[str] = []
+    for key, child in node["children"].items():
+        lines.append(f"{indent}{_safe_key(key)}: {{\n")
+        lines.extend(_render_api_node(child, ir, name_map, indent=indent + "  "))
+        lines.append(f"{indent}}};\n")
+    for key, entry in node["leaves"].items():
+        route = ir.routes[entry["route_index"]]
+        lines.append(f"{indent}{_render_method_signature(route, name_map, key, indent=indent)}\n")
+    return lines
+
+
+def _render_route_table(ir: AppIR, route_names: dict[int, str], route_tree: _NamespaceNode) -> str:
     # Exported so consumers can build extra clients on top — e.g.
     # ``@dyadpy/react``'s ``createNestedClient`` needs the descriptors at
     # runtime to derive the tRPC-style nested namespace.
+    entries_by_index = _flatten_namespace_entries(route_tree)
     lines = ["export const _routes: ReadonlyArray<RouteDescriptor> = [\n"]
     for i, route in enumerate(ir.routes):
-        lines.append(_render_route_descriptor(route, route_names[i], indent="  ") + ",\n")
+        lines.append(
+            _render_route_descriptor(route, route_names[i], entries_by_index[i], indent="  ")
+            + ",\n"
+        )
     lines.append("];\n")
     return "".join(lines)
 
@@ -357,6 +392,145 @@ def _route_path_parts(path: str) -> list[str]:
     return [part for part in re.split(r"[^0-9A-Za-z]+", path) if part]
 
 
+_PARAM_TOKEN_RE = re.compile(r"\{[^}]+\}|\[[^\]]+\]|\$[A-Za-z_][A-Za-z0-9_]*")
+
+
+def _has_param_token(segment: str) -> bool:
+    return _PARAM_TOKEN_RE.search(segment) is not None
+
+
+def _literal_route_segments(path: str) -> list[str]:
+    segments: list[str] = []
+    for part in path.split("/"):
+        if not part:
+            continue
+        literal = _PARAM_TOKEN_RE.sub(" ", part)
+        for token in re.split(r"[^0-9A-Za-z]+", literal):
+            if token:
+                segments.append(_safe_ident(_to_camel(token)))
+    return segments
+
+
+def _route_ends_with_param(path: str) -> bool:
+    parts = [part for part in path.split("/") if part]
+    return bool(parts) and _has_param_token(parts[-1])
+
+
+def _method_verb(method: str, ends_with_param: bool) -> str | None:
+    m = method.upper()
+    if m == "GET":
+        return "byId" if ends_with_param else "list"
+    if m == "POST":
+        return None if ends_with_param else "create"
+    if m in {"PATCH", "PUT"}:
+        return "update"
+    if m == "DELETE":
+        return "delete"
+    return None
+
+
+def _split_camel(value: str) -> list[str]:
+    spaced = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", value)
+    return [part for part in spaced.lower().split(" ") if part]
+
+
+def _lower_first(value: str) -> str:
+    return value[:1].lower() + value[1:] if value else value
+
+
+def _camel_case(parts: list[str]) -> str:
+    return "".join(part if i == 0 else part[:1].upper() + part[1:] for i, part in enumerate(parts))
+
+
+def _derive_verb(
+    operation_name: str,
+    namespace_tail: str | None,
+    method: str,
+    ends_with_param: bool,
+) -> str:
+    fallback = _method_verb(method, ends_with_param)
+    if not namespace_tail:
+        return fallback or operation_name
+
+    parts = _split_camel(operation_name)
+    if not parts:
+        return fallback or operation_name
+
+    tail = namespace_tail.lower()
+    singular = tail[:-1] if tail.endswith("s") else tail
+    last = parts[-1]
+    if last in {tail, singular}:
+        stripped = "".join(parts[:-1])
+        if stripped:
+            return _lower_first(stripped)
+        return fallback or operation_name
+    if len(parts) == 1:
+        return parts[0]
+    return fallback or operation_name
+
+
+def _namespace_entry(route: RouteIR, operation_name: str, route_index: int) -> _NamespaceEntry:
+    segments = _literal_route_segments(route.path)
+    ends_with_param = _route_ends_with_param(route.path)
+    namespace_tail = segments[-1] if segments else None
+    heuristic = _method_verb(route.method, ends_with_param)
+    verb = heuristic or _derive_verb(operation_name, namespace_tail, route.method, ends_with_param)
+
+    if route.method.upper() == "POST" and len(segments) > 1 and not ends_with_param:
+        handler_verb = _derive_verb(operation_name, namespace_tail, route.method, ends_with_param)
+        if handler_verb != "create" and handler_verb != operation_name:
+            verb = handler_verb
+
+    return {
+        "route_index": route_index,
+        "segments": segments,
+        "verb": _safe_ident(verb),
+        "operation_name": operation_name,
+    }
+
+
+def _route_namespace_tree(ir: AppIR, route_names: dict[int, str]) -> _NamespaceNode:
+    root = _new_namespace_node()
+    for i, route in enumerate(ir.routes):
+        entry = _namespace_entry(route, route_names[i], i)
+        cursor = root
+        for segment in entry["segments"]:
+            cursor = cursor["children"].setdefault(segment, _new_namespace_node())
+
+        key = entry["verb"]
+        if key in cursor["leaves"] or key in cursor["children"]:
+            key = _safe_ident(_camel_case(_split_camel(entry["operation_name"])))
+        key = _unique_namespace_key(key, set(cursor["leaves"]) | set(cursor["children"]))
+        entry["verb"] = key
+        cursor["leaves"][key] = entry
+    return root
+
+
+def _unique_namespace_key(candidate: str, used: set[str]) -> str:
+    if candidate not in used and not _is_reserved(candidate):
+        return candidate
+    base = candidate if not _is_reserved(candidate) else f"{candidate}_"
+    i = 2
+    while True:
+        suffixed = f"{base}_{i}"
+        if suffixed not in used:
+            return suffixed
+        i += 1
+
+
+def _flatten_namespace_entries(root: _NamespaceNode) -> dict[int, _NamespaceEntry]:
+    out: dict[int, _NamespaceEntry] = {}
+
+    def visit(node: _NamespaceNode) -> None:
+        for child in node["children"].values():
+            visit(child)
+        for entry in node["leaves"].values():
+            out[entry["route_index"]] = entry
+
+    visit(root)
+    return out
+
+
 def _unique_route_name(candidate: str, used: set[str]) -> str:
     if candidate not in used and not _is_reserved(candidate):
         return candidate
@@ -512,8 +686,14 @@ def _render_union(terms: list[str], *, indent: str) -> str:
     return "\n" + "\n".join(f"{inner}| {t}" for t in terms)
 
 
-def _render_method_signature(route: RouteIR, name_map: dict[str, str], route_name: str) -> str:
-    args_type, args_optional = _render_args_type(route.params, name_map, indent="  ")
+def _render_method_signature(
+    route: RouteIR,
+    name_map: dict[str, str],
+    route_name: str,
+    *,
+    indent: str = "  ",
+) -> str:
+    args_type, args_optional = _render_args_type(route.params, name_map, indent=indent)
     return_type = _render_return_type(route, name_map)
     if args_type is None:
         return f"{route_name}(opts?: CallOptions): {return_type};"
@@ -525,12 +705,14 @@ def _render_method_signature(route: RouteIR, name_map: dict[str, str], route_nam
     if "\n" not in inline and len(inline) <= _INLINE_LINE_BUDGET:
         return inline
 
-    indented_args = textwrap.indent(args_type, "  ").lstrip()
+    continuation = indent + "  "
+    wrapped_args_type, _ = _render_args_type(route.params, name_map, indent=continuation)
+    assert wrapped_args_type is not None
     return (
         f"{route_name}(\n"
-        f"    args{'?' if args_optional else ''}: {indented_args},\n"
-        f"    opts?: CallOptions,\n"
-        f"  ): {return_type};"
+        f"{continuation}args{'?' if args_optional else ''}: {wrapped_args_type},\n"
+        f"{continuation}opts?: CallOptions,\n"
+        f"{indent}): {return_type};"
     )
 
 
@@ -577,11 +759,19 @@ def _render_error_union(raises: list[Any], name_map: dict[str, str], *, indent: 
     )
 
 
-def _render_route_descriptor(route: RouteIR, route_name: str, *, indent: str) -> str:
+def _render_route_descriptor(
+    route: RouteIR,
+    route_name: str,
+    namespace: _NamespaceEntry,
+    *,
+    indent: str,
+) -> str:
     parts = [
         f"method: {json.dumps(route.method)}",
         f"path: {json.dumps(route.path)}",
         f"name: {json.dumps(route_name)}",
+        "segments: " + json.dumps(namespace["segments"]),
+        f"verb: {json.dumps(namespace['verb'])}",
     ]
     if route.params:
         parts.append(_render_param_descriptor_list(route.params, indent=indent))

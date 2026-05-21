@@ -13,7 +13,12 @@ export interface ParamDescriptor {
 export interface RouteDescriptor {
   method: HttpMethod;
   path: string;
+  /** Stable operation name, used for query keys and route metadata. */
   name: string;
+  /** Generated nested API namespace segments, e.g. ["customers", "holds"]. */
+  segments: ReadonlyArray<string>;
+  /** Generated nested API leaf key, e.g. "list", "byId", "release". */
+  verb: string;
   params?: ReadonlyArray<ParamDescriptor>;
   streams?: boolean;
   result?: boolean;

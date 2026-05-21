@@ -31,28 +31,31 @@ type IssueErr = Err<Routes.getIssue.Return>; //                = IssueNotFound |
 
 // 3. Pass the exact Args type to a wrapper that re-shapes a form:
 async function callWithArgs(args: Routes.createIssue.Args) {
-  return api.createIssue(args, { headers: AUTH });
+  return api.issues.create(args, { headers: AUTH });
 }
 
 export function NamespaceContract() {
   const [out, setOut] = useState("Click to run.");
 
   async function run() {
-    const lookup: IssueData | IssueErr = await api
-      .getIssue({ issueId: 999 }, { headers: AUTH })
+    const lookup: IssueData | IssueErr = await api.issues
+      .byId({ issueId: 999 }, { headers: AUTH })
       .then((r) => (r.ok ? r.data : r.error));
 
     const created = await callWithArgs({
       data: { title: "via Routes.createIssue.Args", body: "demo" },
     });
 
-    const failed = await api.transitionIssue({ issueId: 1, to: "blocked" }, { headers: AUTH });
+    const failed = await api.issues.transition.create(
+      { issueId: 1, to: "blocked" },
+      { headers: AUTH },
+    );
 
     setOut(
       [
-        `getIssue(999): ${"kind" in lookup ? `× ${showError(lookup as Routes.transitionIssue.Error)}` : `✓ ${lookup.title}`}`,
-        `createIssue: ${created.ok ? `✓ #${created.data.id}` : `× ${created.error.kind}`}`,
-        `transitionIssue: ${failed.ok ? `✓ ${failed.data.status}` : `× ${showError(failed.error)}`}`,
+        `issues.byId(999): ${"kind" in lookup ? `× ${showError(lookup as Routes.transitionIssue.Error)}` : `✓ ${lookup.title}`}`,
+        `issues.create: ${created.ok ? `✓ #${created.data.id}` : `× ${created.error.kind}`}`,
+        `issues.transition.create: ${failed.ok ? `✓ ${failed.data.status}` : `× ${showError(failed.error)}`}`,
       ].join("\n"),
     );
   }

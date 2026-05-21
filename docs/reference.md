@@ -233,7 +233,7 @@ async def get_issue(issue_id: int) -> Issue:
 TS side:
 
 ```ts
-const r = await api.getIssue({ issueId: 1 });
+const r = await api.issues.byId({ issueId: 1 });
 if (r.ok) return r.data; // r.data: Issue
 switch (
   r.error.kind // exhaustive
@@ -293,7 +293,7 @@ async def ticks(count: int) -> stream[Tick | Done]:
 Wire is SSE (`text/event-stream`). TS client returns an `AsyncIterable`:
 
 ```ts
-for await (const ev of api.ticks({ count: 10 }, { signal: ac.signal })) {
+for await (const ev of api.ticks.list({ count: 10 }, { signal: ac.signal })) {
   if (ev.kind === "tick") console.log(ev.seq);
 }
 ```
@@ -321,7 +321,7 @@ async def events(
         yield SsePayload(data=ev, id=str(ev.seq), retry_ms=3000)
 ```
 
-The client side is fully automatic — `for await (const ev of api.events())`
+The client side is fully automatic — `for await (const ev of api.events.list())`
 reconnects with the right header on any transport error, capped at 5
 minutes of cumulative retry. Typed `@raises` errors and explicit user
 cancellation (`AbortSignal`) still propagate immediately.

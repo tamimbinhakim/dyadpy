@@ -27,7 +27,7 @@ export function ExhaustiveSwitch() {
   const [out, setOut] = useState("Click a button.");
 
   async function go(issueId: number, to: "blocked" | "closed" | "in_progress") {
-    const result = await api.transitionIssue({ issueId, to }, { headers: AUTH });
+    const result = await api.issues.transition.create({ issueId, to }, { headers: AUTH });
     setOut(result.ok ? `✓ now ${result.data.status}` : `× ${describe(result.error)}`);
   }
 

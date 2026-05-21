@@ -31,21 +31,21 @@ You shouldn't have to think about this package much. The
 
 Hard rules I've held this package to:
 
-- **Zero runtime dependencies.** Anything we need (SSE parsing, Proxy
+- **Zero runtime dependencies.** Anything we need (SSE parsing, nested
   dispatch) ships inline.
 - **Tree-shakable.** ESM-first, side-effect-free.
 - **Tiny.** Target is under ~3 KB min+gz. We check it in CI.
 
 ## What's in it
 
-| Export                                              | What it does                                                                                |
-| --------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `createClient({ routes, baseUrl, headers, fetch })` | Returns the Proxy your generated `api.*` calls dispatch through.                            |
-| `forwardHeaders(request)`                           | Copies cookies/auth/tracing headers into SSR calls.                                         |
-| `parseSSE(stream)`                                  | Streams a `ReadableStream<Uint8Array>` into typed SSE frames.                               |
-| `unwrapResult(value)`                               | Unwrap a `Result<T, E>` envelope onto `data` / `throw error`. Used by the binding packages. |
-| `Result<T, E>` (type)                               | `\{ ok: true; data: T \} \| \{ ok: false; error: E \}` — output of `@raises` routes.        |
-| `Ok<R>` / `Err<R>` (types)                          | Extract success / error type from a route's `Return`.                                       |
+| Export                                                         | What it does                                                                                |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `createClient<ApiRoutes>({ routes, baseUrl, headers, fetch })` | Returns the nested object your generated `api.*` calls dispatch through.                    |
+| `forwardHeaders(request)`                                      | Copies cookies/auth/tracing headers into SSR calls.                                         |
+| `parseSSE(stream)`                                             | Streams a `ReadableStream<Uint8Array>` into typed SSE frames.                               |
+| `unwrapResult(value)`                                          | Unwrap a `Result<T, E>` envelope onto `data` / `throw error`. Used by the binding packages. |
+| `Result<T, E>` (type)                                          | `\{ ok: true; data: T \} \| \{ ok: false; error: E \}` — output of `@raises` routes.        |
+| `Ok<R>` / `Err<R>` (types)                                     | Extract success / error type from a route's `Return`.                                       |
 
 If you find yourself reaching for something else, that's probably a bug
 in the codegen — open an
