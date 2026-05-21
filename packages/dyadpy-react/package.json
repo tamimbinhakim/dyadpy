@@ -1,6 +1,6 @@
 {
   "name": "@dyadpy/react",
-  "version": "0.1.2-alpha.4",
+  "version": "0.1.2-alpha.5",
   "description": "React hooks (useQuery, useMutation, useSubscription) on top of TanStack Query for Dyadpy-generated clients.",
   "keywords": [
     "python",

@@ -1,26 +1,18 @@
-export { createDyadpyHooks, createReactClient } from "./hooks.js";
-export type {
-  DyadpyHooks,
-  ReactClient,
-  UseDyadpySubscriptionOptions,
-  UseDyadpySubscriptionResult,
+export {
+  createReactClient,
+  type ReactClient,
+  type UseDyadpySubscriptionOptions,
+  type UseDyadpySubscriptionResult,
 } from "./hooks.js";
-export { computeNamespace, createNestedClient, deriveVerb, methodVerb } from "./proxy.js";
-export type {
-  Leaf as NestedClientLeaf,
-  MutationLeaf,
-  NestedClient,
-  ProxyRouteDescriptor,
-  QueryLeaf,
+
+export {
+  buildNamespaceTree,
+  computeNamespace,
+  deriveVerb,
+  methodVerb,
+  type NamespaceEntry,
+  type ProxyRouteDescriptor,
+  type TreeNode,
 } from "./proxy.js";
-export type {
-  ArgsOf,
-  DataOf,
-  ErrorOf,
-  MaybeArgs,
-  QueryKeyOf,
-  StreamItemOf,
-  StreamKeys,
-  SubscriptionStatus,
-  UnaryKeys,
-} from "./types.js";
+
+export type { SubscriptionStatus } from "./types.js";

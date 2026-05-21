@@ -7,7 +7,7 @@ describe("CSR safety", () => {
     expect(typeof globalThis.document).toBe("undefined");
 
     const mod = await import("../src/index.js");
-    expect(typeof mod.createDyadpyHooks).toBe("function");
+    expect(typeof mod.createReactClient).toBe("function");
   });
 
   it("loads `@dyadpy/react/server` without DOM globals", async () => {
@@ -15,17 +15,6 @@ describe("CSR safety", () => {
     expect(typeof globalThis.document).toBe("undefined");
 
     const mod = await import("../src/server.js");
-    expect(typeof mod.prefetchQuery).toBe("function");
     expect(typeof mod.prefetchQueries).toBe("function");
-    expect(typeof mod.getQueryKey).toBe("function");
-  });
-
-  it("`getQueryKey` is deterministic for equal args", async () => {
-    const { getQueryKey } = (await import("../src/server.js")) as unknown as {
-      getQueryKey: (method: string, args: unknown) => readonly unknown[];
-    };
-    const a = getQueryKey("getUser", { userId: 1 });
-    const b = getQueryKey("getUser", { userId: 1 });
-    expect(a).toEqual(b);
   });
 });

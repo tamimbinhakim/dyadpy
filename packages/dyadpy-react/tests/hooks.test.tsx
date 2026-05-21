@@ -2,10 +2,10 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, render, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { describe, expect, expectTypeOf, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { createReactClient } from "../src/index.js";
-import type { DataOf, QueryKeyOf } from "../src/index.js";
+import type { ProxyRouteDescriptor } from "../src/index.js";
 
 type Result<T, E> = { ok: true; data: T } | { ok: false; error: E };
 
@@ -23,6 +23,17 @@ interface TestApi {
   rawPing(): Promise<{ ok: true; pong: true }>;
   createIssue(args: { data: { title: string } }): Promise<Result<Issue, IssueNotFound>>;
   events(args: { topic: string }): AsyncIterable<{ kind: "tick"; n: number }>;
+}
+
+const ROUTES: ProxyRouteDescriptor[] = [
+  { method: "GET", path: "/issues/{id}", name: "getIssue" },
+  { method: "GET", path: "/ping", name: "rawPing" },
+  { method: "POST", path: "/issues", name: "createIssue" },
+  { method: "GET", path: "/events", name: "events" },
+];
+
+function buildClient(api: Partial<TestApi>) {
+  return createReactClient(api as TestApi, ROUTES);
 }
 
 function makeWrapper() {
@@ -44,33 +55,25 @@ function renderHook<T>(hook: () => T, Wrapper: (p: { children: ReactNode }) => R
 }
 
 describe("useQuery", () => {
-  it("builds reusable query options", async () => {
+  it("builds reusable query options under the nested namespace", async () => {
     const getIssue = vi.fn(async () => ({ ok: true as const, data: { id: 2, title: "opts" } }));
-    const { queryOptions } = createReactClient({ getIssue } as unknown as TestApi);
+    const api = buildClient({ getIssue });
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
-    await client.prefetchQuery(queryOptions("getIssue", { issueId: 2 }));
-
+    await client.prefetchQuery(api.issues.byId.queryOptions({ issueId: 2 }));
     expect(client.getQueryData(["getIssue", { issueId: 2 }])).toEqual({ id: 2, title: "opts" });
   });
 
-  it("keeps selected query data typed", () => {
-    const getIssue = vi.fn(async () => ({ ok: true as const, data: { id: 3, title: "selected" } }));
-    const { queryOptions, queryKey } = createReactClient({ getIssue } as unknown as TestApi);
-    const options = queryOptions("getIssue", { issueId: 3 }, { select: (issue) => issue.title });
-
-    expectTypeOf(options.select).toEqualTypeOf<((issue: Issue) => string) | undefined>();
-    expectTypeOf<QueryKeyOf<TestApi, "getIssue">>().toEqualTypeOf<
-      readonly ["getIssue", { issueId: number }]
-    >();
-    expect(queryKey("getIssue", { issueId: 3 })).toEqual(["getIssue", { issueId: 3 }]);
+  it("queryKey echoes the operation name + args", () => {
+    const api = buildClient({});
+    expect(api.issues.byId.queryKey({ issueId: 3 })).toEqual(["getIssue", { issueId: 3 }]);
   });
 
   it("returns Result.ok data", async () => {
     const getIssue = vi.fn(async () => ({ ok: true as const, data: { id: 1, title: "hi" } }));
-    const { useQuery } = createReactClient({ getIssue } as unknown as TestApi);
+    const api = buildClient({ getIssue });
 
-    const { result } = renderHook(() => useQuery("getIssue", { issueId: 1 }), makeWrapper());
+    const { result } = renderHook(() => api.issues.byId.useQuery({ issueId: 1 }), makeWrapper());
 
     await waitFor(() => expect(result.current?.isSuccess).toBe(true));
     expect(result.current?.data).toEqual({ id: 1, title: "hi" });
@@ -79,9 +82,9 @@ describe("useQuery", () => {
   it("surfaces Result.error on .error", async () => {
     const err = { kind: "IssueNotFound" as const, issueId: 99 };
     const getIssue = vi.fn(async () => ({ ok: false as const, error: err }));
-    const { useQuery } = createReactClient({ getIssue } as unknown as TestApi);
+    const api = buildClient({ getIssue });
 
-    const { result } = renderHook(() => useQuery("getIssue", { issueId: 99 }), makeWrapper());
+    const { result } = renderHook(() => api.issues.byId.useQuery({ issueId: 99 }), makeWrapper());
 
     await waitFor(() => expect(result.current?.isError).toBe(true));
     expect(result.current?.error).toEqual(err);
@@ -90,9 +93,9 @@ describe("useQuery", () => {
   it("passes non-Result returns through untouched", async () => {
     // `{ ok: true, pong: true }` has no `data`/`error` keys — not an envelope.
     const rawPing = vi.fn(async () => ({ ok: true as const, pong: true as const }));
-    const { useQuery } = createReactClient({ rawPing } as unknown as TestApi);
+    const api = buildClient({ rawPing });
 
-    const { result } = renderHook(() => useQuery("rawPing", undefined as never), makeWrapper());
+    const { result } = renderHook(() => api.ping.list.useQuery(), makeWrapper());
 
     await waitFor(() => expect(result.current?.isSuccess).toBe(true));
     expect(result.current?.data).toEqual({ ok: true, pong: true });
@@ -100,9 +103,9 @@ describe("useQuery", () => {
 
   it("forwards args and signal to the api method", async () => {
     const getIssue = vi.fn(async () => ({ ok: true as const, data: { id: 7, title: "x" } }));
-    const { useQuery } = createReactClient({ getIssue } as unknown as TestApi);
+    const api = buildClient({ getIssue });
 
-    const { result } = renderHook(() => useQuery("getIssue", { issueId: 7 }), makeWrapper());
+    const { result } = renderHook(() => api.issues.byId.useQuery({ issueId: 7 }), makeWrapper());
 
     await waitFor(() => expect(result.current?.isSuccess).toBe(true));
     expect(getIssue).toHaveBeenCalledWith(
@@ -113,15 +116,11 @@ describe("useQuery", () => {
 });
 
 describe("useMutation", () => {
-  it("infers mutation data from the ok branch of a Result union", () => {
-    expectTypeOf<DataOf<TestApi["createIssue"]>>().toEqualTypeOf<Issue>();
-  });
-
   it("returns Result.ok data on success", async () => {
     const createIssue = vi.fn(async () => ({ ok: true as const, data: { id: 5, title: "new" } }));
-    const { useMutation } = createReactClient({ createIssue } as unknown as TestApi);
+    const api = buildClient({ createIssue });
 
-    const { result } = renderHook(() => useMutation("createIssue"), makeWrapper());
+    const { result } = renderHook(() => api.issues.create.useMutation(), makeWrapper());
 
     await act(async () => {
       await result.current!.mutateAsync({ data: { title: "new" } });
@@ -132,9 +131,9 @@ describe("useMutation", () => {
   it("rejects with Result.error and lands it on .error", async () => {
     const err = { kind: "IssueNotFound" as const, issueId: 1 };
     const createIssue = vi.fn(async () => ({ ok: false as const, error: err }));
-    const { useMutation } = createReactClient({ createIssue } as unknown as TestApi);
+    const api = buildClient({ createIssue });
 
-    const { result } = renderHook(() => useMutation("createIssue"), makeWrapper());
+    const { result } = renderHook(() => api.issues.create.useMutation(), makeWrapper());
 
     await act(async () => {
       await expect(result.current!.mutateAsync({ data: { title: "x" } })).rejects.toEqual(err);
@@ -154,13 +153,15 @@ async function* immediateThrow(): AsyncIterable<unknown> {
 
 describe("useSubscription", () => {
   it("delivers events and transitions to closed when the stream ends", async () => {
-    const { useSubscription } = createReactClient({
-      events: () => twoTicks(),
-    } as unknown as TestApi);
+    const api = buildClient({ events: () => twoTicks() });
 
     const received: unknown[] = [];
     const { result } = renderHook(
-      () => useSubscription("events", { topic: "x" }, { onEvent: (ev) => received.push(ev) }),
+      () =>
+        api.events.list.useSubscription(
+          { topic: "x" },
+          { onEvent: (ev: unknown) => received.push(ev) },
+        ),
       makeWrapper(),
     );
 
@@ -180,10 +181,10 @@ describe("useSubscription", () => {
       });
       await new Promise((resolve) => opts.signal?.addEventListener("abort", resolve));
     }
-    const { useSubscription } = createReactClient({ events } as unknown as TestApi);
+    const api = buildClient({ events: events as TestApi["events"] });
 
     const { unmount, result } = renderHook(
-      () => useSubscription("events", { topic: "y" }, { onEvent: () => {} }),
+      () => api.events.list.useSubscription({ topic: "y" }, { onEvent: () => {} }),
       makeWrapper(),
     );
 
@@ -194,10 +195,10 @@ describe("useSubscription", () => {
 
   it("stays idle when enabled is false", () => {
     const events = vi.fn();
-    const { useSubscription } = createReactClient({ events } as unknown as TestApi);
+    const api = buildClient({ events: events as TestApi["events"] });
 
     const { result } = renderHook(
-      () => useSubscription("events", { topic: "z" }, { enabled: false, onEvent: () => {} }),
+      () => api.events.list.useSubscription({ topic: "z" }, { enabled: false, onEvent: () => {} }),
       makeWrapper(),
     );
 
@@ -206,10 +207,10 @@ describe("useSubscription", () => {
   });
 
   it("transitions to error and surfaces the thrown value", async () => {
-    const { useSubscription } = createReactClient({ events: immediateThrow } as unknown as TestApi);
+    const api = buildClient({ events: immediateThrow as unknown as TestApi["events"] });
 
     const { result } = renderHook(
-      () => useSubscription("events", { topic: "q" }, { onEvent: () => {} }),
+      () => api.events.list.useSubscription({ topic: "q" }, { onEvent: () => {} }),
       makeWrapper(),
     );
 

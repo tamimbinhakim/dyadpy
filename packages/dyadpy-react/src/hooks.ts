@@ -1,3 +1,24 @@
+/**
+ * React hooks for Dyadpy clients.
+ *
+ * Single public entry: {@link createReactClient}. Pass the generated
+ * `createApi(...)` result and the generated `_routes` array; get back a
+ * tRPC-style nested namespace:
+ *
+ * ```ts
+ * const api = createReactClient(apiClient, _routes);
+ *
+ * api.customers.list.useQuery({ limit: 50 });
+ * api.customers.byId.useQuery({ id });
+ * api.customers.create.useMutation();
+ * api.customers.holds.list.useQuery({ id });
+ * api.notifications.stream.useSubscription(args, { onEvent });
+ * ```
+ *
+ * Naming rules live in `./proxy.ts`. The flat-key shape (`client.useQuery("listX")`)
+ * that previous pre-releases exposed is gone; there is only one client now.
+ */
+
 import {
   mutationOptions,
   queryOptions,
@@ -7,36 +28,21 @@ import {
 } from "@tanstack/react-query";
 import type {
   UseMutationOptions,
-  UseMutationResult,
   UseQueryOptions,
-  UseQueryResult,
-  UseSuspenseQueryResult,
   UseSuspenseQueryOptions,
 } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import type {
-  ArgsOf,
-  DataOf,
-  ErrorOf,
-  MaybeArgs,
-  QueryKeyOf,
-  StreamItemOf,
-  StreamKeys,
-  SubscriptionStatus,
-  UnaryKeys,
-} from "./types.js";
+import { buildNamespaceTree } from "./proxy.js";
+import type { ProxyRouteDescriptor, TreeNode } from "./proxy.js";
+import type { StreamItemOf, SubscriptionStatus } from "./types.js";
+
+function makeQueryKey(method: string, args?: unknown): readonly unknown[] {
+  return args === undefined ? [method] : [method, args];
+}
 
 type Unary = (args?: unknown, opts?: { signal?: AbortSignal }) => Promise<unknown>;
 type Stream = (args?: unknown, opts?: { signal?: AbortSignal }) => AsyncIterable<unknown>;
-type QueryHookOptions<TApi, K extends UnaryKeys<TApi>, TSelected = DataOf<TApi[K]>> = Omit<
-  UseQueryOptions<DataOf<TApi[K]>, ErrorOf<TApi[K]>, TSelected, QueryKeyOf<TApi, K>>,
-  "queryKey" | "queryFn"
-> & { queryKey?: QueryKeyOf<TApi, K> };
-type SuspenseQueryHookOptions<TApi, K extends UnaryKeys<TApi>, TSelected = DataOf<TApi[K]>> = Omit<
-  UseSuspenseQueryOptions<DataOf<TApi[K]>, ErrorOf<TApi[K]>, TSelected, QueryKeyOf<TApi, K>>,
-  "queryKey" | "queryFn"
-> & { queryKey?: QueryKeyOf<TApi, K> };
 
 export interface UseDyadpySubscriptionOptions<TEvent> {
   enabled?: boolean;
@@ -51,137 +57,72 @@ export interface UseDyadpySubscriptionResult {
   error: unknown;
 }
 
-export interface ReactClient<TApi> {
-  queryKey: <K extends UnaryKeys<TApi>>(method: K, args?: ArgsOf<TApi[K]>) => QueryKeyOf<TApi, K>;
+/**
+ * Permissive default type. The codegen-emitted `Operations` map will eventually
+ * pivot through a TypeScript mapped type to give every leaf a tight signature;
+ * for now the call surface is `any` and runtime correctness comes from the
+ * `_routes` descriptors.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- nested-proxy default surface
+export type ReactClient = any;
 
-  queryOptions: <K extends UnaryKeys<TApi>, TSelected = DataOf<TApi[K]>>(
-    method: K,
-    ...args: MaybeArgs<TApi, K, QueryHookOptions<TApi, K, TSelected>>
-  ) => UseQueryOptions<DataOf<TApi[K]>, ErrorOf<TApi[K]>, TSelected, QueryKeyOf<TApi, K>>;
+export function createReactClient<TApi extends object>(
+  api: TApi,
+  routes: readonly ProxyRouteDescriptor[],
+): ReactClient {
+  // ---- internal flat-shape helpers (closure-scoped; not exported) ----------
 
-  useQuery: <K extends UnaryKeys<TApi>, TSelected = DataOf<TApi[K]>>(
-    method: K,
-    ...args: MaybeArgs<TApi, K, QueryHookOptions<TApi, K, TSelected>>
-  ) => UseQueryResult<TSelected, ErrorOf<TApi[K]>>;
-
-  suspenseQueryOptions: <K extends UnaryKeys<TApi>, TSelected = DataOf<TApi[K]>>(
-    method: K,
-    ...args: MaybeArgs<TApi, K, SuspenseQueryHookOptions<TApi, K, TSelected>>
-  ) => UseSuspenseQueryOptions<DataOf<TApi[K]>, ErrorOf<TApi[K]>, TSelected, QueryKeyOf<TApi, K>>;
-
-  useSuspenseQuery: <K extends UnaryKeys<TApi>, TSelected = DataOf<TApi[K]>>(
-    method: K,
-    ...args: MaybeArgs<TApi, K, SuspenseQueryHookOptions<TApi, K, TSelected>>
-  ) => UseSuspenseQueryResult<TSelected, ErrorOf<TApi[K]>>;
-
-  mutationOptions: <K extends UnaryKeys<TApi>>(
-    method: K,
-    options?: Omit<
-      UseMutationOptions<DataOf<TApi[K]>, ErrorOf<TApi[K]>, ArgsOf<TApi[K]>>,
-      "mutationFn"
-    >,
-  ) => UseMutationOptions<DataOf<TApi[K]>, ErrorOf<TApi[K]>, ArgsOf<TApi[K]>>;
-
-  useMutation: <K extends UnaryKeys<TApi>>(
-    method: K,
-    options?: Omit<
-      UseMutationOptions<DataOf<TApi[K]>, ErrorOf<TApi[K]>, ArgsOf<TApi[K]>>,
-      "mutationFn"
-    >,
-  ) => UseMutationResult<DataOf<TApi[K]>, ErrorOf<TApi[K]>, ArgsOf<TApi[K]>>;
-
-  useSubscription: <K extends StreamKeys<TApi>>(
-    method: K,
-    args: ArgsOf<TApi[K]>,
-    options: UseDyadpySubscriptionOptions<StreamItemOf<TApi[K]>>,
-  ) => UseDyadpySubscriptionResult;
-}
-
-export function createReactClient<TApi extends object>(api: TApi): ReactClient<TApi> {
-  function queryKey<K extends UnaryKeys<TApi>>(
-    method: K,
-    args?: ArgsOf<TApi[K]>,
-  ): QueryKeyOf<TApi, K> {
-    return (args === undefined ? [method] : [method, args]) as unknown as QueryKeyOf<TApi, K>;
-  }
-
-  function getQueryOptions<K extends UnaryKeys<TApi>, TSelected = DataOf<TApi[K]>>(
-    method: K,
-    ...hookArgs: MaybeArgs<TApi, K, QueryHookOptions<TApi, K, TSelected>>
-  ) {
-    const [args, options] = splitArgs(hookArgs);
-    return queryOptions<DataOf<TApi[K]>, ErrorOf<TApi[K]>, TSelected, QueryKeyOf<TApi, K>>({
-      queryKey: options?.queryKey ?? queryKey(method, args as ArgsOf<TApi[K]>),
+  function makeQueryOptions(method: string, args?: unknown, options?: Partial<UseQueryOptions>) {
+    return queryOptions({
+      queryKey: options?.queryKey ?? makeQueryKey(method, args),
       ...options,
       queryFn: async ({ signal }) => {
-        const fn = api[method] as unknown as Unary;
-        return dataOrThrow(await fn(args as unknown, { signal })) as DataOf<TApi[K]>;
+        const fn = (api as Record<string, unknown>)[method] as Unary;
+        return dataOrThrow(await fn(args, { signal }));
       },
     });
   }
 
-  function getUseQuery<K extends UnaryKeys<TApi>, TSelected = DataOf<TApi[K]>>(
-    method: K,
-    ...args: MaybeArgs<TApi, K, QueryHookOptions<TApi, K, TSelected>>
-  ) {
-    return useQuery(getQueryOptions<K, TSelected>(method, ...args)) as UseQueryResult<
-      TSelected,
-      ErrorOf<TApi[K]>
-    >;
+  function makeUseQuery(method: string, args?: unknown, options?: Partial<UseQueryOptions>) {
+    return useQuery(makeQueryOptions(method, args, options));
   }
 
-  function getSuspenseQueryOptions<K extends UnaryKeys<TApi>, TSelected = DataOf<TApi[K]>>(
-    method: K,
-    ...args: MaybeArgs<TApi, K, SuspenseQueryHookOptions<TApi, K, TSelected>>
+  function makeSuspenseQueryOptions(
+    method: string,
+    args?: unknown,
+    options?: Partial<UseSuspenseQueryOptions>,
   ) {
-    return getQueryOptions<K, TSelected>(method, ...args) as UseSuspenseQueryOptions<
-      DataOf<TApi[K]>,
-      ErrorOf<TApi[K]>,
-      TSelected,
-      QueryKeyOf<TApi, K>
-    >;
+    return makeQueryOptions(method, args, options as Partial<UseQueryOptions>);
   }
 
-  function getUseSuspenseQuery<K extends UnaryKeys<TApi>, TSelected = DataOf<TApi[K]>>(
-    method: K,
-    ...args: MaybeArgs<TApi, K, SuspenseQueryHookOptions<TApi, K, TSelected>>
+  function makeUseSuspenseQuery(
+    method: string,
+    args?: unknown,
+    options?: Partial<UseSuspenseQueryOptions>,
   ) {
-    return useSuspenseQuery(getSuspenseQueryOptions(method, ...args)) as UseSuspenseQueryResult<
-      TSelected,
-      ErrorOf<TApi[K]>
-    >;
+    return useSuspenseQuery(
+      makeSuspenseQueryOptions(method, args, options) as UseSuspenseQueryOptions,
+    );
   }
 
-  function getMutationOptions<K extends UnaryKeys<TApi>>(
-    method: K,
-    options?: Omit<
-      UseMutationOptions<DataOf<TApi[K]>, ErrorOf<TApi[K]>, ArgsOf<TApi[K]>>,
-      "mutationFn"
-    >,
-  ) {
-    return mutationOptions<DataOf<TApi[K]>, ErrorOf<TApi[K]>, ArgsOf<TApi[K]>>({
+  function makeMutationOptions(method: string, options?: Partial<UseMutationOptions>) {
+    return mutationOptions({
       ...options,
-      mutationFn: async (vars) => {
-        const fn = api[method] as unknown as Unary;
-        return dataOrThrow(await fn(vars as unknown)) as DataOf<TApi[K]>;
+      mutationFn: async (vars: unknown) => {
+        const fn = (api as Record<string, unknown>)[method] as Unary;
+        return dataOrThrow(await fn(vars));
       },
     });
   }
 
-  function getUseMutation<K extends UnaryKeys<TApi>>(
-    method: K,
-    options?: Omit<
-      UseMutationOptions<DataOf<TApi[K]>, ErrorOf<TApi[K]>, ArgsOf<TApi[K]>>,
-      "mutationFn"
-    >,
-  ) {
-    return useMutation(getMutationOptions(method, options));
+  function makeUseMutation(method: string, options?: Partial<UseMutationOptions>) {
+    return useMutation(makeMutationOptions(method, options));
   }
 
-  function useSubscription<K extends StreamKeys<TApi>>(
-    method: K,
-    args: ArgsOf<TApi[K]>,
-    options: UseDyadpySubscriptionOptions<StreamItemOf<TApi[K]>>,
+  function makeUseSubscription<TEvent>(
+    method: string,
+    args: unknown,
+    options: UseDyadpySubscriptionOptions<TEvent>,
   ): UseDyadpySubscriptionResult {
     const { enabled = true, onEvent, onOpen, onClose, onError } = options;
     const [status, setStatus] = useState<SubscriptionStatus>("idle");
@@ -202,13 +143,13 @@ export function createReactClient<TApi extends object>(api: TApi): ReactClient<T
 
       void (async () => {
         try {
-          const fn = api[method] as unknown as Stream;
-          const iter = fn(args as unknown, { signal: controller.signal });
+          const fn = (api as Record<string, unknown>)[method] as Stream;
+          const iter = fn(args, { signal: controller.signal });
           setStatus("open");
           cb.current.onOpen?.();
           for await (const ev of iter) {
             if (controller.signal.aborted) break;
-            cb.current.onEvent(ev as StreamItemOf<TApi[K]>);
+            cb.current.onEvent(ev as TEvent);
           }
           if (controller.signal.aborted) return;
           setStatus("closed");
@@ -228,25 +169,52 @@ export function createReactClient<TApi extends object>(api: TApi): ReactClient<T
     return { status, error: errorState };
   }
 
-  return {
-    queryKey,
-    queryOptions: getQueryOptions,
-    useQuery: getUseQuery,
-    suspenseQueryOptions: getSuspenseQueryOptions,
-    useSuspenseQuery: getUseSuspenseQuery,
-    mutationOptions: getMutationOptions,
-    useMutation: getUseMutation,
-    useSubscription,
-  };
-}
+  // ---- proxy assembly ------------------------------------------------------
 
-export const createDyadpyHooks = createReactClient;
-export type DyadpyHooks<TApi> = ReactClient<TApi>;
+  const tree = buildNamespaceTree(routes);
+  return makeNodeProxy(tree);
 
-function splitArgs<TArgs, TOptions>(
-  args: readonly [args?: TArgs | undefined, options?: TOptions],
-): [TArgs | undefined, TOptions | undefined] {
-  return [args[0] as TArgs | undefined, args[1]];
+  function makeNodeProxy(node: TreeNode): unknown {
+    return new Proxy(
+      {},
+      {
+        get(_t, prop: string) {
+          const leaf = node.leaves.get(prop);
+          if (leaf !== undefined) return makeLeaf(leaf.operationName);
+          const child = node.children.get(prop);
+          if (child !== undefined) return makeNodeProxy(child);
+          return undefined;
+        },
+        ownKeys() {
+          return [...node.children.keys(), ...node.leaves.keys()];
+        },
+        getOwnPropertyDescriptor() {
+          return { enumerable: true, configurable: true };
+        },
+      },
+    );
+  }
+
+  function makeLeaf(name: string) {
+    return {
+      queryKey: (args?: unknown) => makeQueryKey(name, args),
+      queryOptions: (args?: unknown, options?: Partial<UseQueryOptions>) =>
+        makeQueryOptions(name, args, options),
+      useQuery: (args?: unknown, options?: Partial<UseQueryOptions>) =>
+        makeUseQuery(name, args, options),
+      suspenseQueryOptions: (args?: unknown, options?: Partial<UseSuspenseQueryOptions>) =>
+        makeSuspenseQueryOptions(name, args, options),
+      useSuspenseQuery: (args?: unknown, options?: Partial<UseSuspenseQueryOptions>) =>
+        makeUseSuspenseQuery(name, args, options),
+      mutationOptions: (options?: Partial<UseMutationOptions>) =>
+        makeMutationOptions(name, options),
+      useMutation: (options?: Partial<UseMutationOptions>) => makeUseMutation(name, options),
+      useSubscription: <TEvent = StreamItemOf<unknown>>(
+        args: unknown,
+        options: UseDyadpySubscriptionOptions<TEvent>,
+      ) => makeUseSubscription(name, args, options),
+    };
+  }
 }
 
 function stableKey(value: unknown): string {
