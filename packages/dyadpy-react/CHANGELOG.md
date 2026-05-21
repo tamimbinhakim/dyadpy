@@ -8,6 +8,13 @@ this file. Managed automatically by
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2-alpha.0](https://github.com/tamimbinhakim/dyadpy/compare/dyadpy-react-v0.2.1-alpha.0...dyadpy-react-v0.2.2-alpha.0) (2026-05-21)
+
+
+### Bug Fixes
+
+* infer optional react route args ([7c689fe](https://github.com/tamimbinhakim/dyadpy/commit/7c689fe753d7957dd07f7603c3ffada6740930bc))
+
 ## [0.2.1-alpha.0](https://github.com/tamimbinhakim/dyadpy/compare/dyadpy-react-v0.2.0-alpha.0...dyadpy-react-v0.2.1-alpha.0) (2026-05-21)
 
 
