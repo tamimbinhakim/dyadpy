@@ -3,6 +3,13 @@ name: Release
 on:
   push:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      path:
+        description: "Ad-hoc: package path under packages/ (e.g. dyadpy). Reads version from pyproject.toml, publishes to PyPI, tags, creates a GitHub release."
+        required: true
+        default: "dyadpy"
+        type: string
 
 # Default is read-only. Release-please needs write, publishers need OIDC.
 permissions:
@@ -11,6 +18,7 @@ permissions:
 jobs:
   release-please:
     name: release-please
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -51,6 +59,54 @@ jobs:
       - uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # release/v1
         with:
           packages-dir: packages/dyadpy/dist
+
+  publish-ad-hoc:
+    name: Publish ${{ inputs.path }} (ad-hoc)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    environment:
+      name: pypi
+      url: https://pypi.org/p/${{ inputs.path }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.0
+      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v7.1.1
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.0.0
+        with:
+          python-version: "3.13"
+
+      - name: Read version
+        id: ver
+        working-directory: packages/${{ inputs.path }}
+        run: |
+          set -euo pipefail
+          VERSION=$(grep -m1 '^version = ' pyproject.toml | sed -E 's/version = "(.+)"/\1/')
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Build
+        working-directory: packages/${{ inputs.path }}
+        run: uv build
+
+      - uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # release/v1
+        with:
+          packages-dir: packages/${{ inputs.path }}/dist
+
+      - name: Tag and release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          NAME="${{ inputs.path }}"
+          VERSION="${{ steps.ver.outputs.version }}"
+          TAG="${NAME}-v${VERSION}"
+          git tag "$TAG"
+          git push origin "$TAG"
+          gh release create "$TAG" \
+            --title "$TAG" \
+            --notes "Release of \`$NAME\` $VERSION. See packages/$NAME/CHANGELOG.md." \
+            --target main
 
   publish-npm-ts:
     name: Publish @dyadpy/ts to npm

@@ -411,7 +411,8 @@ def test_unconstrained_object_type_is_not_never_record() -> None:
         return data
 
     out = render(build_ir(app))
-    assert "metadata: Record<string, unknown>" in out
+    assert "export type JsonValue = JsonPrimitive | JsonObject | JsonValue[];" in out
+    assert "metadata: JsonObject" in out
     assert "Record<string, never>" not in out
 
 

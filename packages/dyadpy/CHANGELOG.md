@@ -7,6 +7,13 @@ from [Conventional Commits](https://www.conventionalcommits.org/).
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.9](https://github.com/tamimbinhakim/dyadpy/compare/dyadpy-v0.1.8...dyadpy-v0.1.9) (2026-05-23)
+
+### Bug Fixes
+
+- emit reusable JSON aliases for unconstrained object schemas instead of `Record<string, unknown>`/empty records.
+- remove legacy bracket route parameter recognition from generated client route key parsing.
+
 ## [0.1.8](https://github.com/tamimbinhakim/dyadpy/compare/dyadpy-v0.1.7...dyadpy-v0.1.8) (2026-05-21)
 
 

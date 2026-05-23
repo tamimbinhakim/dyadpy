@@ -19,6 +19,11 @@ HEADER_BANNER = """// @ts-nocheck
 
 """
 
+JSON_TYPE_ALIASES = """export type JsonPrimitive = string | number | boolean | null;
+export type JsonValue = JsonPrimitive | JsonObject | JsonValue[];
+export type JsonObject = { [key: string]: JsonValue };
+"""
+
 # Matches the project's oxfmt line-width.
 _INLINE_FIELDS = 3
 _INLINE_LINE_BUDGET = 100
@@ -61,6 +66,10 @@ def render(ir: AppIR) -> str:
     if error_keys:
         parts.append(_section())
         parts.append(_render_components(error_keys, ir, name_map))
+
+    if _uses_json_types(ir):
+        parts.append(_section())
+        parts.append(JSON_TYPE_ALIASES)
 
     enum_block = _render_enum_consts(ir, name_map)
     if enum_block:
@@ -309,6 +318,9 @@ _TS_RESERVED_TYPE_NAMES = frozenset(
         "CallOptions",
         "RouteDescriptor",
         "Routes",
+        "JsonPrimitive",
+        "JsonValue",
+        "JsonObject",
         "api",
     }
 )
@@ -392,7 +404,7 @@ def _route_path_parts(path: str) -> list[str]:
     return [part for part in re.split(r"[^0-9A-Za-z]+", path) if part]
 
 
-_PARAM_TOKEN_RE = re.compile(r"\{[^}]+\}|\[[^\]]+\]|\$[A-Za-z_][A-Za-z0-9_]*")
+_PARAM_TOKEN_RE = re.compile(r"\{[^}]+\}|\$[A-Za-z_][A-Za-z0-9_]*")
 
 
 def _has_param_token(segment: str) -> bool:
@@ -577,6 +589,8 @@ def _render_type(
     if not isinstance(schema, dict):
         return "unknown"
     s = cast("dict[str, Any]", schema)
+    if not s:
+        return "JsonValue"
 
     if "$ref" in s:
         raw = str(s["$ref"]).rsplit("/", 1)[-1]
@@ -635,12 +649,50 @@ def _render_type(
         required: set[str] = {_to_camel(str(k)) for k in required_raw}
         additional = s.get("additionalProperties")
         if not props and additional is not None and additional is not False:
+            if additional is True or additional == {}:
+                return "JsonObject"
             return f"Record<string, {_render_type(additional, name_map, indent=indent)}>"
         if not props:
-            return "Record<string, unknown>"
+            return "JsonObject"
         return _render_object(props, required, name_map, indent=indent)
 
     return "unknown"
+
+
+def _uses_json_types(ir: AppIR) -> bool:
+    for schema in ir.components.values():
+        if _schema_uses_json_types(schema):
+            return True
+    for route in ir.routes:
+        if route.response is not None and _schema_uses_json_types(route.response):
+            return True
+        if route.event_schema is not None and _schema_uses_json_types(route.event_schema):
+            return True
+        for param in route.params:
+            if _schema_uses_json_types(param.schema):
+                return True
+        for error in route.raises:
+            if _schema_uses_json_types(error.schema):
+                return True
+    return False
+
+
+def _schema_uses_json_types(schema: Any) -> bool:
+    if schema == {}:
+        return True
+    if isinstance(schema, list):
+        return any(_schema_uses_json_types(item) for item in schema)
+    if not isinstance(schema, dict):
+        return False
+    s = cast("dict[str, Any]", schema)
+    if s.get("type") == "object" or "properties" in s or "additionalProperties" in s:
+        props = cast("dict[str, Any]", s.get("properties") or {})
+        additional = s.get("additionalProperties")
+        if not props and (additional is None or additional is True or additional == {}):
+            return True
+        if additional is True or additional == {}:
+            return True
+    return any(_schema_uses_json_types(value) for value in s.values())
 
 
 def _render_object(
