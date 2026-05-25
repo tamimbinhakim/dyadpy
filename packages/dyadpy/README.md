@@ -15,10 +15,11 @@ ships:
 - A type extractor that walks `inspect.signature` +
   `typing.get_type_hints`, normalizes through `msgspec`'s native JSON
   Schema export, and produces a canonical IR.
-- A codegen that turns the IR into a single `client.ts` for your
-  frontend.
+- A codegen that turns the IR into an optimized generated `client/`
+  directory for your frontend.
 - A CLI (`dyadpy dev`, `dyadpy build`, `dyadpy codegen`, `dyadpy init`) that
-  runs the whole loop in one process.
+  runs the whole loop in one process, hot-swaps successful edits, and keeps the
+  last good app serving when a reload fails.
 
 For the full story, the design rationale, and a side-by-side comparison
 vs. FastAPI + openapi-typescript / tRPC / Encore.ts / Connect-RPC, see
@@ -68,7 +69,7 @@ Run it:
 dyadpy dev server.app:app
 ```
 
-The watcher writes `frontend/src/lib/dyadpy/client.ts` automatically. Then
+The watcher writes `frontend/src/lib/dyadpy/client/` automatically. Then
 in your frontend:
 
 ```ts

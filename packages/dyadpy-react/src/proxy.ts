@@ -1,19 +1,8 @@
-/**
- * Namespace-tree builder for the React client.
- *
- * Naming is generated once by `dyadpy/codegen.py` and carried in each route
- * descriptor as `segments` + `verb`. The React package deliberately does not
- * recompute names from HTTP method/path; one generated namespace is the API.
- */
+import type { RouteMeta } from "@dyadpy/ts";
 
-export interface ProxyRouteDescriptor {
-  method: string;
-  path: string;
-  name: string;
-  segments: readonly string[];
-  verb: string;
-  params?: readonly unknown[];
-}
+/** Namespace-tree builder for the React client. */
+
+export type ReactRouteMeta = RouteMeta;
 
 export interface NamespaceEntry {
   /** Literal generated namespace segments. */
@@ -32,16 +21,16 @@ export interface TreeNode {
   leaves: Map<string, NamespaceEntry>;
 }
 
-export function computeNamespace(route: ProxyRouteDescriptor): NamespaceEntry {
+export function computeNamespace(route: ReactRouteMeta): NamespaceEntry {
   return {
     segments: route.segments,
     verb: route.verb,
     operationName: route.name,
-    hasArgs: (route.params?.length ?? 0) > 0,
+    hasArgs: route.hasArgs === true,
   };
 }
 
-export function buildNamespaceTree(routes: readonly ProxyRouteDescriptor[]): TreeNode {
+export function buildNamespaceTree(routes: readonly ReactRouteMeta[]): TreeNode {
   const root: TreeNode = { children: new Map(), leaves: new Map() };
   for (const route of routes) {
     const entry = computeNamespace(route);

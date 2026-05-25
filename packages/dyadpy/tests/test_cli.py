@@ -38,11 +38,12 @@ def test_codegen_writes_client(tmp_path: Path, monkeypatch) -> None:
     )
     monkeypatch.syspath_prepend(str(tmp_path))
 
-    out = tmp_path / "client.ts"
+    out = tmp_path / "client"
     result = runner.invoke(app_cli, ["codegen", "demo_pkg.app:app", "--out", str(out)])
     assert result.exit_code == 0, result.stdout
-    assert out.exists()
-    assert "AUTO-GENERATED" in out.read_text()
+    assert (out / "index.ts").exists()
+    assert (out / "types.d.ts").exists()
+    assert "AUTO-GENERATED" in (out / "index.ts").read_text()
 
 
 def test_init_scaffolds(tmp_path: Path, monkeypatch) -> None:

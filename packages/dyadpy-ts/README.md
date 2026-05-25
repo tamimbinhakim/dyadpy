@@ -1,7 +1,6 @@
 # @dyadpy/ts
 
-> The tiny TypeScript runtime imported by the `client.ts` that Dyadpy
-> generates for your frontend.
+> The tiny TypeScript runtime imported by Dyadpy-generated clients.
 
 ```bash
 pnpm add @dyadpy/ts@alpha   # alpha channel — drop `@alpha` once v0.1.0 ships
@@ -9,11 +8,11 @@ pnpm add @dyadpy/ts@alpha   # alpha channel — drop `@alpha` once v0.1.0 ships
 
 You shouldn't have to think about this package much. The
 [`dyadpy`](https://pypi.org/project/dyadpy/) Python CLI writes a generated
-`client.ts` into your frontend that imports from `@dyadpy/ts`. That's it.
+`client/` directory into your frontend that imports from `@dyadpy/ts`. That's it.
 
 > **Why `@dyadpy/ts` and not `@dyadpy/react`?**
 > Because this package is intentionally framework-agnostic. It's the
-> tiny TypeScript runtime that the generated `client.ts` imports
+> tiny TypeScript runtime that the generated client imports
 > regardless of where it ends up — Next.js, Vite + React, SvelteKit,
 > SolidStart, Astro, plain HTML, a Node script. The name `@dyadpy/ts`
 > reflects the language (TypeScript), not a framework. Framework-specific
@@ -27,7 +26,7 @@ You shouldn't have to think about this package much. The
 > | `@dyadpy/solid`  | SolidJS `createResource` / signal bindings                            | v0.1                    |
 >
 > If you only need React, you'll still install `@dyadpy/ts` (the
-> generated file imports it) _plus_ `@dyadpy/react` for the hooks.
+> generated client imports it) _plus_ `@dyadpy/react` for the hooks.
 
 Hard rules I've held this package to:
 
@@ -38,14 +37,14 @@ Hard rules I've held this package to:
 
 ## What's in it
 
-| Export                                                         | What it does                                                                                |
-| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `createClient<ApiRoutes>({ routes, baseUrl, headers, fetch })` | Returns the nested object your generated `api.*` calls dispatch through.                    |
-| `forwardHeaders(request)`                                      | Copies cookies/auth/tracing headers into SSR calls.                                         |
-| `parseSSE(stream)`                                             | Streams a `ReadableStream<Uint8Array>` into typed SSE frames.                               |
-| `unwrapResult(value)`                                          | Unwrap a `Result<T, E>` envelope onto `data` / `throw error`. Used by the binding packages. |
-| `Result<T, E>` (type)                                          | `\{ ok: true; data: T \} \| \{ ok: false; error: E \}` — output of `@raises` routes.        |
-| `Ok<R>` / `Err<R>` (types)                                     | Extract success / error type from a route's `Return`.                                       |
+| Export                                                                           | What it does                                                                                                            |
+| -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `createLazyClient<ApiRoutes>({ routeMeta, loadRoute, baseUrl, headers, fetch })` | Returns the nested object your generated `api.*` calls dispatch through while loading full route descriptors on demand. |
+| `forwardHeaders(request)`                                                        | Copies cookies/auth/tracing headers into SSR calls.                                                                     |
+| `parseSSE(stream)`                                                               | Streams a `ReadableStream<Uint8Array>` into typed SSE frames.                                                           |
+| `unwrapResult(value)`                                                            | Unwrap a `Result<T, E>` envelope onto `data` / `throw error`. Used by the binding packages.                             |
+| `Result<T, E>` (type)                                                            | `\{ ok: true; data: T \} \| \{ ok: false; error: E \}` — output of `@raises` routes.                                    |
+| `Ok<R>` / `Err<R>` (types)                                                       | Extract success / error type from a route's `Return`.                                                                   |
 
 If you find yourself reaching for something else, that's probably a bug
 in the codegen — open an

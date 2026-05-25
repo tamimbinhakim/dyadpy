@@ -62,7 +62,7 @@ class RouteIR:
     binary_body: bool = False  # body is raw bytes (skip JSON envelope)
     binary_response: bool = False  # response is raw bytes (decode as Blob on TS side)
     form_body: bool = False  # body is application/x-www-form-urlencoded / multipart
-    description: str | None = None  # handler docstring, surfaces as JSDoc in client.ts
+    description: str | None = None  # handler docstring, surfaces as JSDoc in generated types
 
 
 @dataclass(slots=True)
@@ -386,7 +386,9 @@ def _build_exc_struct(exc: type[Exception]) -> type[msgspec.Struct]:
         hints = {}
     hints.pop("return", None)
 
-    field_defs: list[tuple[str, Any]] = list(hints.items())
+    field_defs: list[tuple[str, Any] | tuple[str, Any, Any]] = list(hints.items())
+    if "request_id" not in hints:
+        field_defs.append(("request_id", str | None, None))
     struct_type: type[msgspec.Struct] = msgspec.defstruct(
         exc.__name__,
         field_defs,

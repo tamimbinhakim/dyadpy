@@ -8,6 +8,19 @@ this file. Managed automatically by
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.5-alpha.0](https://github.com/tamimbinhakim/dyadpy/compare/dyadpy-react-v0.2.2-alpha.0...dyadpy-react-v0.2.5-alpha.0) (2026-05-25)
+
+### ⚠ BREAKING CHANGES
+
+- `createReactClient(api, routes)` now expects generated `routeMeta` instead
+  of the old full `_routes` descriptor array.
+
+### Features
+
+- bind React hooks from lightweight route metadata so apps do not need to
+  import full route descriptors just to construct the hook tree.
+- require `@dyadpy/ts>=0.1.5-alpha.0` for the lazy generated-client runtime.
+
 ## [0.2.2-alpha.0](https://github.com/tamimbinhakim/dyadpy/compare/dyadpy-react-v0.2.1-alpha.0...dyadpy-react-v0.2.2-alpha.0) (2026-05-21)
 
 

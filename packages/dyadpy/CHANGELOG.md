@@ -7,6 +7,30 @@ from [Conventional Commits](https://www.conventionalcommits.org/).
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.10](https://github.com/tamimbinhakim/dyadpy/compare/dyadpy-v0.1.9...dyadpy-v0.1.10) (2026-05-25)
+
+### ⚠ BREAKING CHANGES
+
+- codegen now writes an optimized `client/` directory instead of a single
+  `client.ts`; passing a `.ts` output path is rejected.
+
+### Features
+
+- add a smart owned dev server that hot-swaps successful app reloads without
+  restarting uvicorn, keeps serving the last good app on reload failures, and
+  logs route diffs with concise errors.
+- split generated TypeScript into a tiny `index.ts`, `types.d.ts`,
+  `meta.ts`, and lazily imported `routes/` chunks to keep dev bundlers from
+  transforming the full route graph for every importer.
+- compact uncaught and request error tracebacks by default, with
+  `DYADPY_FULL_TRACEBACK=1` available when a full Python traceback is needed.
+
+### Bug Fixes
+
+- include request ids on typed error payloads when middleware provides them.
+- suppress noisy exception chaining for public validation and declared-error
+  responses.
+
 ## [0.1.9](https://github.com/tamimbinhakim/dyadpy/compare/dyadpy-v0.1.8...dyadpy-v0.1.9) (2026-05-23)
 
 ### Bug Fixes

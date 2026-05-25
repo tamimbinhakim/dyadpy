@@ -1,10 +1,10 @@
 """``dyadpy`` CLI.
 
 - ``dyadpy init``      — scaffold ``server/app.py`` + a ``dyadpy.toml``.
-- ``dyadpy codegen``   — emit ``client.ts`` once and exit.
-- ``dyadpy dev``       — run uvicorn with reload, watch the server tree, and
-                         atomically rewrite ``client.ts`` on every change.
-- ``dyadpy build``     — emit ``client.ts`` then start uvicorn without the watcher.
+- ``dyadpy codegen``   — emit the optimized client directory once and exit.
+- ``dyadpy dev``       — run the owned hot-swap dev server and atomically
+                         rewrite the client directory on every successful change.
+- ``dyadpy build``     — emit the client directory then start uvicorn without the watcher.
 
 The dev watcher does the writes *atomically* (tmp + rename) so the TS toolchain
 never reads a half-written file mid-rebuild — that single detail is what makes
@@ -13,10 +13,8 @@ never reads a half-written file mid-rebuild — that single detail is what makes
 
 from __future__ import annotations
 
-import asyncio
 import importlib
 import json
-import signal
 import subprocess
 import sys
 from dataclasses import asdict
@@ -27,11 +25,11 @@ import typer
 import uvicorn
 from rich import print as rprint
 from rich.console import Console
-from watchfiles import awatch  # pyright: ignore[reportUnknownVariableType]
 
 from dyadpy import __version__
 from dyadpy.app import App
 from dyadpy.codegen import write as write_client
+from dyadpy.dev import run_dyadpy_dev
 from dyadpy.diff import diff_ir, format_github, format_human, format_json, load_ir
 from dyadpy.ir import build_ir
 from dyadpy.openapi import write as write_openapi
@@ -79,8 +77,10 @@ def version() -> None:
 @app_cli.command()
 def init(
     target: Annotated[Path, typer.Option(help="Where to scaffold")] = Path("server"),
-    out: Annotated[Path, typer.Option(help="Where the client.ts will be written")] = Path(
-        "src/lib/dyadpy/client.ts",
+    out: Annotated[
+        Path, typer.Option(help="Where the generated client directory will be written")
+    ] = Path(
+        "src/lib/dyadpy/client",
     ),
 ) -> None:
     """Scaffold a minimal Dyadpy server and wire the client output path."""
@@ -106,15 +106,15 @@ def init(
 @app_cli.command()
 def codegen(
     target: Annotated[str, typer.Argument(help="module:attr of your dyadpy.App")],
-    out: Annotated[Path, typer.Option(help="Where to write client.ts")] = Path(
-        "src/lib/dyadpy/client.ts",
+    out: Annotated[Path, typer.Option(help="Where to write the generated client directory")] = Path(
+        "src/lib/dyadpy/client",
     ),
 ) -> None:
-    """Generate the TypeScript client once and exit."""
+    """Generate the optimized TypeScript client directory once and exit."""
     app = _load_app(target)
     ir = build_ir(app)
     write_client(ir, out)
-    rprint(f"[bold green]wrote[/bold green] {out} ({len(ir.routes)} routes)")
+    rprint(f"[bold green]wrote[/bold green] {out}/ ({len(ir.routes)} routes)")
 
 
 @app_cli.command()
@@ -122,49 +122,13 @@ def dev(
     target: Annotated[str, typer.Argument(help="module:attr of your dyadpy.App")],
     host: Annotated[str, typer.Option()] = "127.0.0.1",
     port: Annotated[int, typer.Option()] = 8000,
-    out: Annotated[Path, typer.Option(help="Where to write client.ts")] = Path(
-        "src/lib/dyadpy/client.ts",
+    out: Annotated[Path, typer.Option(help="Where to write the generated client directory")] = Path(
+        "src/lib/dyadpy/client",
     ),
     watch: Annotated[Path, typer.Option(help="Source directory to watch")] = Path("."),
 ) -> None:
-    """Run uvicorn with reload and regenerate ``client.ts`` on every change."""
-    routes = _regenerate(target, out)
-    rprint(f"[bold green]wrote[/bold green] {out} ({routes} routes)")
-
-    # uvicorn handles handler hot-reload; we just keep the client.ts fresh on
-    # every change so the TS toolchain always sees the latest types.
-    proc = subprocess.Popen(
-        [
-            sys.executable,
-            "-m",
-            "uvicorn",
-            target,
-            "--host",
-            host,
-            "--port",
-            str(port),
-            "--reload",
-            "--reload-dir",
-            str(watch),
-        ],
-    )
-
-    async def watch_loop() -> None:
-        async for _changes in awatch(watch, recursive=True, watch_filter=_py_only):
-            try:
-                routes = _regenerate(target, out)
-                rprint(f"[dim]regen[/dim]   {out} ({routes} routes)")
-            except Exception as exc:
-                console.print_exception()
-                rprint(f"[red]regen failed:[/red] {exc}")
-
-    try:
-        asyncio.run(watch_loop())
-    except KeyboardInterrupt:
-        pass
-    finally:
-        proc.send_signal(signal.SIGINT)
-        proc.wait()
+    """Run the owned dev server with smart in-process hot swapping."""
+    run_dyadpy_dev(target=target, host=host, port=port, out=out, watch=watch)
 
 
 @app_cli.command()
@@ -172,13 +136,13 @@ def build(
     target: Annotated[str, typer.Argument(help="module:attr of your dyadpy.App")],
     host: Annotated[str, typer.Option()] = "0.0.0.0",
     port: Annotated[int, typer.Option()] = 8000,
-    out: Annotated[Path, typer.Option(help="Where to write client.ts")] = Path(
-        "src/lib/dyadpy/client.ts",
+    out: Annotated[Path, typer.Option(help="Where to write the generated client directory")] = Path(
+        "src/lib/dyadpy/client",
     ),
 ) -> None:
-    """Generate ``client.ts`` and start uvicorn without the watcher."""
+    """Generate the client directory and start uvicorn without the watcher."""
     routes = _regenerate(target, out)
-    rprint(f"[bold green]wrote[/bold green] {out} ({routes} routes)")
+    rprint(f"[bold green]wrote[/bold green] {out}/ ({routes} routes)")
     uvicorn.run(target, host=host, port=port)
 
 
@@ -294,10 +258,6 @@ def deploy(
     else:
         raise typer.BadParameter(f"unknown provider: {provider!r} (fly | render | modal)")
     raise typer.Exit(code=rc)
-
-
-def _py_only(_change: object, path: str) -> bool:
-    return path.endswith(".py")
 
 
 _STARTER_APP = '''"""A minimal Dyadpy server. Edit me."""

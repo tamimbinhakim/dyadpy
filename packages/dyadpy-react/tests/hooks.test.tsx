@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { createReactClient } from "../src/index.js";
-import type { ProxyRouteDescriptor } from "../src/index.js";
+import type { ReactRouteMeta } from "../src/index.js";
 
 type Result<T, E> = { ok: true; data: T } | { ok: false; error: E };
 
@@ -34,39 +34,36 @@ interface GeneratedApi {
   };
 }
 
-const ROUTES: ProxyRouteDescriptor[] = [
+const ROUTES: ReactRouteMeta[] = [
   {
-    method: "GET",
-    path: "/issues/{id}",
+    id: "getIssue",
     name: "getIssue",
     segments: ["issues"],
     verb: "byId",
-    params: [{}],
+    hasArgs: true,
   },
-  { method: "GET", path: "/ping", name: "rawPing", segments: ["ping"], verb: "list" },
+  { id: "rawPing", name: "rawPing", segments: ["ping"], verb: "list" },
   {
-    method: "GET",
-    path: "/search",
+    id: "search",
     name: "search",
     segments: ["search"],
     verb: "list",
-    params: [{}],
+    hasArgs: true,
   },
   {
-    method: "POST",
-    path: "/issues",
+    id: "createIssue",
     name: "createIssue",
     segments: ["issues"],
     verb: "create",
-    params: [{}],
+    hasArgs: true,
   },
   {
-    method: "GET",
-    path: "/events",
+    id: "events",
     name: "events",
     segments: ["events"],
     verb: "list",
-    params: [{}],
+    hasArgs: true,
+    streams: true,
   },
 ];
 
@@ -169,12 +166,11 @@ describe("useQuery", () => {
       search: { list(args: { q: string }): Promise<{ id: number }[]> };
     }>({ search: { list: search } }, [
       {
-        method: "GET",
-        path: "/search",
+        id: "search",
         name: "search",
         segments: ["search"],
         verb: "list",
-        params: [{}],
+        hasArgs: true,
       },
     ]);
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });

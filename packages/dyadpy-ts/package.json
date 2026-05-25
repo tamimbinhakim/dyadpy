@@ -1,7 +1,7 @@
 {
   "name": "@dyadpy/ts",
-  "version": "0.1.2-alpha.0",
-  "description": "Tiny TypeScript runtime imported by Dyadpy-generated client.ts files.",
+  "version": "0.1.5-alpha.0",
+  "description": "Tiny TypeScript runtime imported by Dyadpy-generated clients.",
   "keywords": [
     "python",
     "rpc",

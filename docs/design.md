@@ -23,9 +23,9 @@ What it costs you:
 
 ## Codegen exists, but you never see it
 
-One command — `dyadpy dev` — runs your ASGI app, watches files, and writes one `client.ts` into your frontend. No `package.json` script. No pre-commit hook. No "did CI run codegen?". The watcher owns it.
+One command — `dyadpy dev` — runs your ASGI app, watches files, and writes an optimized `client/` directory into your frontend. No `package.json` script. No pre-commit hook. No "did CI run codegen?". The watcher owns it.
 
-The generated file is one file, not a `client/` directory with twelve `*.types.ts`. You can grep it, diff it, snapshot it, commit it (or `.gitignore` it — your call).
+The generated directory has a tiny public entry, one declaration file, one route metadata file, and lazy runtime chunks under `routes/`. You can grep it, diff it, snapshot it, commit it (or `.gitignore` it — your call), and dev bundlers do not have to transform every route descriptor for every importer.
 
 ## One transport, two shapes
 
@@ -57,6 +57,9 @@ What this gets you:
 - No `try/catch` lottery on the client.
 - No string-matching on `error.detail`.
 - Exhaustiveness checks: add a new error to `@raises(...)` and every call site lights up red until you handle it.
+- Short public failures: parser/validator causes are not chained into declared
+  error tracebacks, and a request id can ride on the error payload for log
+  lookup.
 
 What it costs you:
 
@@ -74,7 +77,7 @@ What this gets you:
 
 ## Generated client output is part of the public surface
 
-A minor version bump that changes the shape of `client.ts` in a way that breaks a working caller is a breaking change. The output rules — multi-line wrapping past N fields, JSDoc from docstrings, trailing commas — are part of the contract.
+A minor version bump that changes the generated client shape in a way that breaks a working caller is a breaking change. The output rules — multi-line wrapping past N fields, JSDoc from docstrings, trailing commas — are part of the contract.
 
 What this gets you: your client doesn't break when you `pnpm up @dyadpy/ts` to a new patch version.
 

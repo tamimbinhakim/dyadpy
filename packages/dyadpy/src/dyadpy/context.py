@@ -144,10 +144,10 @@ def after(fn: Callable[..., Any], *args: Any, **kwargs: Any) -> None:
     """
     try:
         ctx = current_context_var.get()
-    except LookupError as exc:
+    except LookupError:
         raise RuntimeError(
             "dyadpy.after(...) called outside a request handler",
-        ) from exc
+        ) from None
     ctx.after(fn, *args, **kwargs)
 
 

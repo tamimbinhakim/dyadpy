@@ -9,7 +9,7 @@ export {
   buildNamespaceTree,
   computeNamespace,
   type NamespaceEntry,
-  type ProxyRouteDescriptor,
+  type ReactRouteMeta,
   type TreeNode,
 } from "./proxy.js";
 

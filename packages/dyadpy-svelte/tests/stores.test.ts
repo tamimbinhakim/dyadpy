@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { get } from "svelte/store";
+import { DyadpyError } from "@dyadpy/ts";
 
 import { createDyadpyStores } from "../src/index.js";
 
@@ -54,7 +55,8 @@ describe("query store", () => {
     await wait();
     const val = get(store);
     expect(val.status).toBe("error");
-    expect(val.error).toEqual({ issueId: 99, kind: "IssueNotFound" });
+    expect(val.error).toBeInstanceOf(DyadpyError);
+    expect(val.error).toMatchObject({ issueId: 99, kind: "IssueNotFound" });
   });
 
   it("does not fetch when enabled=false", () => {

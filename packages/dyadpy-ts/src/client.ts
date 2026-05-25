@@ -1,40 +1,69 @@
 import { parseSSE } from "./sse.js";
-import type { CallOptions, ClientConfig, Result, RouteDescriptor } from "./types.js";
+import { buildError, DyadpyError } from "./types.js";
+import type { CallOptions, LazyClientConfig, Result, RouteDescriptor, RouteMeta } from "./types.js";
 
 type Args = Record<string, unknown>;
 type FetchImpl = typeof globalThis.fetch;
 
-export function createClient<TApi extends object = Record<string, unknown>>(
-  config: ClientConfig,
+export function createLazyClient<TApi extends object = Record<string, unknown>>(
+  config: LazyClientConfig,
 ): TApi {
   const baseUrl = (config.baseUrl ?? "").replace(/\/$/, "");
   const fetchImpl: FetchImpl = config.fetch ?? globalThis.fetch.bind(globalThis);
+  const cache = new Map<string, Promise<RouteDescriptor>>();
   const root: Record<string, unknown> = Object.create(null);
 
-  for (const route of config.routes) {
+  const loadRoute = (id: string): Promise<RouteDescriptor> => {
+    let cached = cache.get(id);
+    if (cached === undefined) {
+      cached = Promise.resolve(config.loadRoute(id));
+      cache.set(id, cached);
+    }
+    return cached;
+  };
+
+  for (const route of config.routeMeta) {
     const fn = (args?: Args, opts: CallOptions = {}) => {
       if (route.streams) {
-        return streamCall(route, args ?? {}, opts, baseUrl, config.headers, fetchImpl);
+        return streamCallLazy(
+          route,
+          args ?? {},
+          opts,
+          baseUrl,
+          config.headers,
+          fetchImpl,
+          loadRoute,
+        );
       }
-      const { url, init } = buildRequest(route, args ?? {}, opts, baseUrl, config.headers);
-      return unaryCall(route, url, init, fetchImpl);
+      return loadRoute(route.id).then((loaded) => {
+        const { url, init } = buildRequest(loaded, args ?? {}, opts, baseUrl, config.headers);
+        return unaryCall(loaded, url, init, fetchImpl);
+      });
     };
 
-    let cursor = root;
-    for (const segment of route.segments) {
-      const existing = cursor[segment];
-      if (existing && typeof existing === "object") {
-        cursor = existing as Record<string, unknown>;
-      } else {
-        const child: Record<string, unknown> = Object.create(null);
-        cursor[segment] = child;
-        cursor = child;
-      }
-    }
-    cursor[route.verb] = fn;
+    installRoute(root, route, fn);
   }
 
   return root as TApi;
+}
+
+function installRoute(
+  root: Record<string, unknown>,
+  route: Pick<RouteDescriptor, "segments" | "verb">,
+  fn: (args?: Args, opts?: CallOptions) => unknown,
+): void {
+  let cursor = root;
+  for (const segment of route.segments) {
+    const existing = cursor[segment];
+    if (existing && typeof existing === "object") {
+      cursor = existing as Record<string, unknown>;
+    } else {
+      const child: Record<string, unknown> = Object.create(null);
+      cursor[segment] = child;
+      cursor = child;
+    }
+  }
+  cursor[route.verb] = fn;
 }
 
 function buildRequest(
@@ -136,6 +165,19 @@ function buildRequest(
   };
 }
 
+async function* streamCallLazy(
+  route: RouteMeta,
+  args: Args,
+  opts: CallOptions,
+  baseUrl: string,
+  defaultHeaders: Record<string, string> | undefined,
+  fetchImpl: FetchImpl,
+  loadRoute: (id: string) => Promise<RouteDescriptor>,
+): AsyncIterableIterator<unknown> {
+  const loaded = await loadRoute(route.id);
+  yield* streamCall(loaded, args, opts, baseUrl, defaultHeaders, fetchImpl);
+}
+
 async function unaryCall(
   route: RouteDescriptor,
   url: string,
@@ -143,23 +185,59 @@ async function unaryCall(
   fetchImpl: FetchImpl,
 ): Promise<unknown> {
   const res = await fetchImpl(url, init);
-  if (!res.ok) throw await httpError(res);
 
   if (route.binaryResponse) {
+    if (!res.ok) throw await httpError(res);
     // Server marked the route as raw bytes — hand back a Blob, skip JSON parsing.
     return await res.blob();
   }
 
   const ct = res.headers.get("content-type") ?? "";
+
+  // JSON path — covers both 2xx envelopes and 4xx/5xx typed-error envelopes
+  // ({ ok: false, error: { kind, … } }). Frameworks like Causeway map declared
+  // `@raises` errors to their HTTP status code while keeping the envelope body;
+  // we recognize that shape and surface it as `Result.error` instead of a
+  // generic `HTTP NNN: …` so consumers can branch on `error.kind`.
   if (ct.includes("application/json")) {
     const raw = (await res.json()) as unknown;
-    const value = snakeToCamelDeep(raw);
+    const value = snakeToCamelDeep(raw) as unknown;
+    if (isTypedErrorEnvelope(value)) {
+      if (route.result) return value as Result<unknown, unknown>;
+      const errPayload = (value as { error: Record<string, unknown> }).error;
+      // Carry the HTTP status onto the thrown error so consumers don't need
+      // to inspect the response separately.
+      throw buildError({ ...errPayload, status: errPayload.status ?? res.status });
+    }
+    if (!res.ok) throw httpErrorFromJson(res.status, raw);
     // `result: true` hands the envelope back untouched; the caller's static
     // type is `Result<T, E>` so TypeScript forces them to branch on `ok`.
     return route.result ? (value as Result<unknown, unknown>) : value;
   }
+
+  if (!res.ok) throw await httpError(res);
   if (res.status === 204 || ct === "") return undefined;
   return await res.text();
+}
+
+function isTypedErrorEnvelope(value: unknown): value is { ok: false; error: { kind: string } } {
+  if (!value || typeof value !== "object") return false;
+  const v = value as { ok?: unknown; error?: unknown };
+  if (v.ok !== false) return false;
+  const err = v.error as { kind?: unknown } | undefined;
+  return Boolean(err) && typeof err?.kind === "string";
+}
+
+function httpErrorFromJson(status: number, raw: unknown): DyadpyError {
+  if (raw && typeof raw === "object") {
+    return buildError({ ...(raw as Record<string, unknown>), status });
+  }
+  return new DyadpyError({
+    kind: "HttpError",
+    status,
+    message: `HTTP ${status}`,
+    data: raw,
+  });
 }
 
 // Streaming caller with built-in resume. We track the last `id:` seen and,
@@ -253,11 +331,17 @@ async function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   });
 }
 
-async function httpError(res: Response): Promise<Error & { status: number; body: string }> {
+async function httpError(res: Response): Promise<DyadpyError> {
   const body = await res.text();
-  return Object.assign(new Error(`HTTP ${res.status}: ${body}`), {
+  const parsed = safeJsonParse(body);
+  if (parsed && typeof parsed === "object" && "kind" in (parsed as Record<string, unknown>)) {
+    return buildError({ ...(parsed as Record<string, unknown>), status: res.status });
+  }
+  return new DyadpyError({
+    kind: "HttpError",
     status: res.status,
-    body,
+    message: `HTTP ${res.status}`,
+    data: body,
   });
 }
 

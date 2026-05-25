@@ -8,6 +8,22 @@ this file. Managed automatically by
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.5-alpha.0](https://github.com/tamimbinhakim/dyadpy/compare/dyadpy-ts-v0.1.2-alpha.0...dyadpy-ts-v0.1.5-alpha.0) (2026-05-25)
+
+### ⚠ BREAKING CHANGES
+
+- remove the eager `createClient({ routes })` / `ClientConfig` public path.
+  Generated clients now use `createLazyClient({ routeMeta, loadRoute })`.
+
+### Features
+
+- add `createLazyClient`, `RouteMeta`, and `LazyClientConfig` so generated
+  clients can keep route metadata small and load full descriptors on first use.
+- surface typed and HTTP failures as `DyadpyError` instances with short,
+  copyable messages while preserving `kind`, `status`, and extra typed fields.
+- support request-scoped SSR header forwarding with clearer Promise misuse
+  errors.
+
 ## [0.1.2-alpha.0](https://github.com/tamimbinhakim/dyadpy/compare/dyadpy-ts-v0.1.1-alpha.0...dyadpy-ts-v0.1.2-alpha.0) (2026-05-21)
 
 

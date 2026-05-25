@@ -5,12 +5,11 @@ describe("computeNamespace", () => {
   it("uses generated namespace metadata directly", () => {
     expect(
       computeNamespace({
-        method: "GET",
-        path: "/customers/{id}",
+        id: "getCustomer",
         name: "getCustomer",
         segments: ["customers"],
         verb: "byId",
-        params: [{}],
+        hasArgs: true,
       }),
     ).toEqual({
       segments: ["customers"],
@@ -25,19 +24,17 @@ describe("buildNamespaceTree", () => {
   it("builds nested namespaces from generated descriptors", () => {
     const tree = buildNamespaceTree([
       {
-        method: "GET",
-        path: "/customers",
+        id: "listCustomers",
         name: "listCustomers",
         segments: ["customers"],
         verb: "list",
       },
       {
-        method: "POST",
-        path: "/customers/{id}/holds",
+        id: "placeHold",
         name: "placeHold",
         segments: ["customers", "holds"],
         verb: "place",
-        params: [{}],
+        hasArgs: true,
       },
     ]);
 
@@ -50,15 +47,13 @@ describe("buildNamespaceTree", () => {
     expect(() =>
       buildNamespaceTree([
         {
-          method: "GET",
-          path: "/customers",
+          id: "listCustomers",
           name: "listCustomers",
           segments: ["customers"],
           verb: "list",
         },
         {
-          method: "GET",
-          path: "/customers",
+          id: "allCustomers",
           name: "allCustomers",
           segments: ["customers"],
           verb: "list",

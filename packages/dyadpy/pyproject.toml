@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "dyadpy"
-version = "0.1.9"
+version = "0.1.10"
 description = "A type-safe RPC bridge between Python and TypeScript. The function signature is the contract."
 readme = "README.md"
 license = { text = "MIT" }
@@ -39,7 +39,7 @@ classifiers = [
 
 dependencies = [
   "msgspec>=0.19",
-  "starlette>=0.45",
+  "starlette>=1.0.1",
   "uvicorn[standard]>=0.32",
   "watchfiles>=1.0",
   "typer>=0.15",

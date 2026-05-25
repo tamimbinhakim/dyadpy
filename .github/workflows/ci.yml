@@ -15,6 +15,18 @@ permissions:
   contents: read
 
 jobs:
+  version-guard:
+    name: Version guard
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.0
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.0.0
+        with:
+          python-version: "3.13"
+      - run: python scripts/check_versions.py
+
   commitlint:
     name: Lint commits
     if: github.event_name == 'pull_request'
@@ -132,7 +144,7 @@ jobs:
 
   required:
     name: All checks passed
-    needs: [lint-ts, test-ts, lint-py, test-py]
+    needs: [version-guard, lint-ts, test-ts, lint-py, test-py]
     if: always()
     runs-on: ubuntu-latest
     permissions:

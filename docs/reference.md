@@ -245,6 +245,30 @@ switch (
 }
 ```
 
+Typed errors are public values, not internal stack traces. If the raised
+exception has `status` and `code` attributes, Dyadpy copies them into
+`result.error` and uses `status` as the HTTP response status. If
+`request.state.request_id` is set by middleware, the payload also carries
+`request_id` so logs and client reports can be correlated:
+
+```json
+{
+  "ok": false,
+  "error": {
+    "kind": "IssueNotFound",
+    "issue_id": 1,
+    "status": 404,
+    "code": "issue_not_found",
+    "request_id": "req_abc123"
+  }
+}
+```
+
+For declared errors and request validation errors, Dyadpy suppresses parser
+exception chains. The client gets the short structured payload; internal,
+undeclared exceptions are logged server-side with a compact traceback and return
+a scrubbed 500 payload with the request id when available.
+
 ### Exceptions inside generic types
 
 An Exception subclass nested inside a user-defined generic Struct (e.g. a

@@ -150,7 +150,7 @@ def test_computed_field_in_generated_ts_type() -> None:
     async def rect() -> Rect:
         return Rect(width=1, height=2)
 
-    out = render(build_ir(app))
+    out = "\n".join(render(build_ir(app)).values())
     assert "area:" in out  # computed field present on the response type
 
 

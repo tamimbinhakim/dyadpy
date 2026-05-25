@@ -30,9 +30,24 @@ export interface RouteDescriptor {
   formBody?: boolean;
 }
 
-export interface ClientConfig {
+export interface RouteMeta {
+  /** Stable generated route id, usually the route namespace name. */
+  id: string;
+  /** Stable operation name, used for query keys and route metadata. */
+  name: string;
+  /** Generated nested API namespace segments, e.g. ["customers", "holds"]. */
+  segments: ReadonlyArray<string>;
+  /** Generated nested API leaf key, e.g. "list", "byId", "release". */
+  verb: string;
+  /** Whether generated route functions expect an args object before options. */
+  hasArgs?: boolean;
+  streams?: boolean;
+}
+
+export interface LazyClientConfig {
   baseUrl?: string;
-  routes: ReadonlyArray<RouteDescriptor>;
+  routeMeta: ReadonlyArray<RouteMeta>;
+  loadRoute: (id: string) => RouteDescriptor | Promise<RouteDescriptor>;
   fetch?: typeof globalThis.fetch;
   headers?: Record<string, string>;
 }
@@ -45,10 +60,69 @@ export interface CallOptions {
 export type Result<T, E> = { ok: true; data: T } | { ok: false; error: E };
 
 /**
- * Unwrap a Result envelope: returns `data` on success, throws `error` on failure.
- * Plain (non-envelope) values pass through unchanged. Used by the framework
- * binding packages so a typed error union lands on the consumer's `.error`
- * slot rather than buried inside `.data`.
+ * Real `Error` subclass thrown for both typed (`@raises`) errors and bare HTTP
+ * failures. Carries the discriminator (`kind`) and any extra fields the server
+ * emitted so callers can branch on `err.kind === "Conflict"` while still getting
+ * `err.message`, `err instanceof Error`, and a proper stack trace.
+ *
+ * For typed errors the `kind` is the server's discriminator (`"Conflict"`,
+ * `"NotFound"`, etc.); for HTTP failures with no envelope it falls back to
+ * `"HttpError"`.
+ */
+export class DyadpyError extends Error {
+  readonly kind: string;
+  readonly status?: number;
+  readonly code?: string;
+  /** Raw payload from the server — full original error object or response text. */
+  readonly data?: unknown;
+
+  constructor(init: {
+    kind: string;
+    message?: string;
+    status?: number;
+    code?: string;
+    data?: unknown;
+    /** Extra fields lifted onto the instance so `err.foo` matches the union shape. */
+    extras?: Record<string, unknown>;
+  }) {
+    super(init.message ?? init.kind);
+    this.name = "DyadpyError";
+    this.kind = init.kind;
+    if (init.status !== undefined) this.status = init.status;
+    if (init.code !== undefined) this.code = init.code;
+    if (init.data !== undefined) this.data = init.data;
+    if (init.extras) {
+      for (const [k, v] of Object.entries(init.extras)) {
+        if (!(k in this)) (this as Record<string, unknown>)[k] = v;
+      }
+    }
+  }
+}
+
+const KNOWN_ERROR_KEYS = new Set(["kind", "message", "status", "code"]);
+
+function toDyadpyError(raw: unknown): DyadpyError {
+  if (raw instanceof DyadpyError) return raw;
+  if (raw && typeof raw === "object") {
+    const r = raw as Record<string, unknown>;
+    const kind = typeof r.kind === "string" ? r.kind : "Error";
+    const message = typeof r.message === "string" ? r.message : undefined;
+    const status = typeof r.status === "number" ? r.status : undefined;
+    const code = typeof r.code === "string" ? r.code : undefined;
+    const extras: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(r)) {
+      if (!KNOWN_ERROR_KEYS.has(k)) extras[k] = v;
+    }
+    return new DyadpyError({ kind, message, status, code, data: raw, extras });
+  }
+  return new DyadpyError({ kind: "Error", message: String(raw), data: raw });
+}
+
+/**
+ * Unwrap a Result envelope: returns `data` on success, throws a `DyadpyError`
+ * on failure. Plain (non-envelope) values pass through unchanged. Used by the
+ * framework binding packages so a typed error union lands on the consumer's
+ * `.error` slot rather than buried inside `.data`.
  */
 type Envelope = { ok: boolean; data?: unknown; error?: unknown };
 export function unwrapResult(value: unknown): unknown {
@@ -56,7 +130,12 @@ export function unwrapResult(value: unknown): unknown {
   const e = value as Envelope;
   if (typeof e.ok !== "boolean" || (!("data" in e) && !("error" in e))) return value;
   if (e.ok) return e.data;
-  throw e.error;
+  throw toDyadpyError(e.error);
+}
+
+/** @internal — exported so generated clients can build errors with the same logic. */
+export function buildError(raw: unknown): DyadpyError {
+  return toDyadpyError(raw);
 }
 
 // `OkOf` / `ErrOf` are the distributive workers; `Ok` / `Err` apply `Awaited`

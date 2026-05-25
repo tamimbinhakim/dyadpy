@@ -60,16 +60,16 @@ The handler signature is the API contract. No `class PostRequest(BaseModel)` in 
 ## 3. Run dev
 
 ```bash
-dyadpy dev server.app:app --out ../frontend/src/lib/dyadpy/client.ts
+dyadpy dev server.app:app --out ../frontend/src/lib/dyadpy/client
 ```
 
 - Uvicorn starts on `http://127.0.0.1:8000`.
-- Dyadpy watches `*.py` and rewrites the generated `client.ts` atomically on save.
+- Dyadpy watches `*.py` and rewrites the generated `client/` directory atomically on save.
 
 For a one-shot codegen (no server, no watcher):
 
 ```bash
-dyadpy codegen server.app:app --out ../frontend/src/lib/dyadpy/client.ts
+dyadpy codegen server.app:app --out ../frontend/src/lib/dyadpy/client
 ```
 
 ## 4. Call it
@@ -150,6 +150,9 @@ if (result.ok) {
 ```
 
 TypeScript forces you to handle each declared error case before reaching `result.data`.
+If your error class defines `status` and `code`, those fields are included in
+the payload and `status` becomes the HTTP status. Middleware-provided
+`request.state.request_id` is copied into `result.error.requestId` for tracing.
 
 ## 7. Other primitives you'll reach for
 
@@ -261,7 +264,7 @@ Full SSR guide: [`docs/ssr.md`](./ssr.md).
 `dyadpy dev` takes `module:attr`, not a path. Make sure `server/app.py` defines `app = App()` and the working directory is the Python project root.
 
 **My TS types are `any`.**
-You're missing `@dyadpy/ts`, or your editor hasn't picked up the generated `client.ts`. Restart the TypeScript server.
+You're missing `@dyadpy/ts`, or your editor hasn't picked up the generated `client/` directory. Restart the TypeScript server.
 
 **Streaming doesn't cancel server-side.**
 Your handler needs to periodically `await` (or check `request.is_disconnected()`). A tight CPU loop will keep running until the next await.

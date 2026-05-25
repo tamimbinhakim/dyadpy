@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createClient } from "../src/client.js";
-import type { RouteDescriptor } from "../src/types.js";
+import { createLazyClient } from "../src/client.js";
+import type { RouteDescriptor, RouteMeta } from "../src/types.js";
 
 const routes: RouteDescriptor[] = [
   {
@@ -13,6 +13,29 @@ const routes: RouteDescriptor[] = [
     streams: true,
   },
 ];
+
+const routeMeta: RouteMeta[] = routes.map((route) => ({
+  id: route.name,
+  name: route.name,
+  segments: route.segments,
+  verb: route.verb,
+  ...((route.params?.length ?? 0) > 0 ? { hasArgs: true } : {}),
+  ...(route.streams ? { streams: true } : {}),
+}));
+
+function createTestClient<TApi extends object = Record<string, unknown>>(config: {
+  fetch?: typeof fetch;
+}): TApi {
+  return createLazyClient<TApi>({
+    ...config,
+    routeMeta,
+    loadRoute: (id) => {
+      const route = routes.find((item) => item.name === id);
+      if (route === undefined) throw new Error(id);
+      return route;
+    },
+  });
+}
 
 function sseStream(frames: string[]): ReadableStream<Uint8Array> {
   const enc = new TextEncoder();
@@ -41,7 +64,7 @@ describe("streaming client", () => {
         }),
     );
 
-    const api = createClient({ routes, fetch: fetchMock }) as {
+    const api = createTestClient({ fetch: fetchMock }) as {
       chat: { list: () => AsyncIterable<{ kind: string; text?: string }> };
     };
 
@@ -65,7 +88,7 @@ describe("streaming client", () => {
         }),
     );
 
-    const api = createClient({ routes, fetch: fetchMock }) as {
+    const api = createTestClient({ fetch: fetchMock }) as {
       chat: { list: () => AsyncIterable<unknown> };
     };
 
@@ -107,7 +130,7 @@ describe("streaming client", () => {
       });
     });
 
-    const api = createClient({ routes, fetch: fetchMock }) as {
+    const api = createTestClient({ fetch: fetchMock }) as {
       chat: { list: () => AsyncIterable<{ n: number }> };
     };
     const got: number[] = [];

@@ -48,6 +48,20 @@ def test_exception_bare_falls_back_to_message() -> None:
     assert payload["message"] == "nope"
 
 
+def test_exception_payload_includes_class_status_and_code() -> None:
+    class Missing(Exception):
+        status = 404
+        code = "missing"
+
+    payload = exception_to_payload(Missing("gone"))
+    assert payload == {
+        "kind": "Missing",
+        "message": "gone",
+        "status": 404,
+        "code": "missing",
+    }
+
+
 def test_raises_decorator_aggregates() -> None:
     class A(Exception): ...
 

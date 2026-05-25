@@ -5,7 +5,9 @@ from __future__ import annotations
 import json
 import keyword
 import re
+import shutil
 from collections.abc import Iterable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, TypedDict, cast
 
@@ -30,69 +32,165 @@ _INLINE_LINE_BUDGET = 100
 _INLINE_UNION_TERMS = 3
 
 
-def _render_header(ir: AppIR) -> str:
-    # Streaming routes signal errors as SSE `event: error` frames, not as Result
-    # envelopes — so `Result` is only imported when at least one unary route raises.
-    type_imports = ["CallOptions", "ClientConfig", "RouteDescriptor"]
+def _render_types_header(ir: AppIR) -> str:
+    type_imports = ["CallOptions"]
     if any(route.raises and not route.streams for route in ir.routes):
-        type_imports.insert(1, "Result")
-    return (
-        HEADER_BANNER
-        + 'import { createClient } from "@dyadpy/ts";\n'
-        + f'import type {{ {", ".join(type_imports)} }} from "@dyadpy/ts";\n'
-    )
+        type_imports.append("Result")
+    return HEADER_BANNER + f'import type {{ {", ".join(type_imports)} }} from "@dyadpy/ts";\n'
 
 
 def _section() -> str:
     return "\n"
 
 
-def render(ir: AppIR) -> str:
-    _check_route_name_collisions(ir)
-    parts: list[str] = [_render_header(ir)]
+@dataclass(frozen=True, slots=True)
+class _RenderState:
+    ir: AppIR
+    name_map: dict[str, str]
+    route_names: dict[int, str]
+    route_tree: _NamespaceNode
+    domain_keys: list[str]
+    error_keys: list[str]
 
+
+def _build_state(ir: AppIR) -> _RenderState:
+    _check_route_name_collisions(ir)
     name_map = _disambiguate(ir.components.keys())
     route_names = _route_ts_names(ir)
     route_tree = _route_namespace_tree(ir, route_names)
     error_names = {e.name for r in ir.routes for e in r.raises}
-
     domain_keys = sorted(k for k in ir.components if name_map[k] not in error_names)
     error_keys = sorted(k for k in ir.components if name_map[k] in error_names)
+    return _RenderState(
+        ir=ir,
+        name_map=name_map,
+        route_names=route_names,
+        route_tree=route_tree,
+        domain_keys=domain_keys,
+        error_keys=error_keys,
+    )
 
-    if domain_keys:
-        parts.append(_section())
-        parts.append(_render_components(domain_keys, ir, name_map))
 
-    if error_keys:
+def render(ir: AppIR) -> dict[str, str]:
+    """Render the optimized folder client.
+
+    The generated public entry stays tiny. Heavy declaration output lives in
+    ``types.d.ts`` and full route descriptors live in lazily imported route
+    chunks under ``routes/``.
+    """
+    state = _build_state(ir)
+    files: dict[str, str] = {
+        "index.ts": _render_index(state),
+        "types.d.ts": _render_types_file(state),
+        "meta.ts": _render_meta_file(state),
+    }
+    files.update(_render_route_files(state))
+    return files
+
+
+def _render_types_file(state: _RenderState) -> str:
+    ir = state.ir
+    name_map = state.name_map
+    parts: list[str] = [_render_types_header(ir)]
+
+    if state.domain_keys:
         parts.append(_section())
-        parts.append(_render_components(error_keys, ir, name_map))
+        parts.append(_render_components(state.domain_keys, ir, name_map))
+
+    if state.error_keys:
+        parts.append(_section())
+        parts.append(_render_components(state.error_keys, ir, name_map))
 
     if _uses_json_types(ir):
         parts.append(_section())
         parts.append(JSON_TYPE_ALIASES)
 
-    enum_block = _render_enum_consts(ir, name_map)
-    if enum_block:
-        parts.append(_section())
-        parts.append(enum_block)
-
     parts.append(_section())
-    parts.append(_render_api_interface(ir, name_map, route_tree))
-    parts.append("\n")
-    parts.append(_render_route_table(ir, route_names, route_tree))
-    parts.append(
-        '\nexport type ApiClientOptions = Omit<ClientConfig, "routes">;\n\n'
-        "export function createApi(options: ApiClientOptions = {}): ApiRoutes {\n"
-        "  return createClient<ApiRoutes>({ ...options, routes: _routes });\n"
-        "}\n\n"
-        "export const api = createApi();\n",
-    )
+    parts.append(_render_api_interface(ir, name_map, state.route_tree))
 
-    namespace = _render_routes_namespace(ir, name_map, route_names)
+    namespace = _render_routes_namespace(ir, name_map, state.route_names)
     if namespace:
         parts.append(_section())
         parts.append(namespace)
     return "".join(parts)
+
+
+def _render_index(state: _RenderState) -> str:
+    return (
+        HEADER_BANNER
+        + 'import { createLazyClient } from "@dyadpy/ts";\n'
+        + 'import type { LazyClientConfig } from "@dyadpy/ts";\n'
+        + 'import { routeMeta } from "./meta";\n'
+        + 'import { loadRoute } from "./routes";\n'
+        + 'import type { ApiRoutes } from "./types";\n\n'
+        + 'export type * from "./types";\n'
+        + 'export { routeMeta } from "./meta";\n\n'
+        + 'export type ApiClientOptions = Omit<LazyClientConfig, "routeMeta" | "loadRoute">;\n\n'
+        + "export function createApi(options: ApiClientOptions = {}): ApiRoutes {\n"
+        + "  return createLazyClient<ApiRoutes>({ ...options, routeMeta, loadRoute });\n"
+        + "}\n\n"
+        + "export const api = createApi();\n"
+    )
+
+
+def _render_meta_file(state: _RenderState) -> str:
+    entries_by_index = _flatten_namespace_entries(state.route_tree)
+    lines = [
+        HEADER_BANNER,
+        'import type { RouteMeta } from "@dyadpy/ts";\n\n',
+        "export const routeMeta: ReadonlyArray<RouteMeta> = [\n",
+    ]
+    for i, route in enumerate(state.ir.routes):
+        lines.append(
+            _render_route_meta(route, state.route_names[i], entries_by_index[i], indent="  ")
+            + ",\n",
+        )
+    lines.append("];\n")
+    return "".join(lines)
+
+
+def _render_route_files(state: _RenderState) -> dict[str, str]:
+    entries_by_index = _flatten_namespace_entries(state.route_tree)
+    chunk_names = _route_chunk_names(entries_by_index)
+    routes_by_chunk: dict[str, list[int]] = {}
+    for i in range(len(state.ir.routes)):
+        routes_by_chunk.setdefault(chunk_names[i], []).append(i)
+
+    files: dict[str, str] = {}
+    index_lines = [
+        HEADER_BANNER,
+        'import type { RouteDescriptor } from "@dyadpy/ts";\n\n',
+        "export async function loadRoute(id: string): Promise<RouteDescriptor> {\n",
+        "  switch (id) {\n",
+    ]
+    for i in range(len(state.ir.routes)):
+        route_name = state.route_names[i]
+        chunk_name = chunk_names[i]
+        index_lines.append(
+            f"    case {json.dumps(route_name)}:\n"
+            f"      return (await import({json.dumps('./' + chunk_name)})).{route_name};\n",
+        )
+    index_lines.append(
+        "    default:\n      throw new Error(`Unknown Dyadpy route: ${id}`);\n  }\n}\n",
+    )
+    files["routes/index.ts"] = "".join(index_lines)
+
+    for chunk_name, indexes in routes_by_chunk.items():
+        lines = [
+            HEADER_BANNER,
+            'import type { RouteDescriptor } from "@dyadpy/ts";\n',
+        ]
+        for i in indexes:
+            route = state.ir.routes[i]
+            entry = entries_by_index[i]
+            route_name = state.route_names[i]
+            lines.append("\n")
+            lines.append(
+                f"export const {route_name}: RouteDescriptor = "
+                f"{_render_route_descriptor(route, route_name, entry, indent='')};\n",
+            )
+        files[f"routes/{chunk_name}.ts"] = "".join(lines)
+    return files
 
 
 def _render_components(keys: list[str], ir: AppIR, name_map: dict[str, str]) -> str:
@@ -150,63 +248,40 @@ def _render_api_node(
     return lines
 
 
-def _render_route_table(ir: AppIR, route_names: dict[int, str], route_tree: _NamespaceNode) -> str:
-    # Exported so consumers can build extra clients on top — e.g.
-    # ``@dyadpy/react``'s ``createNestedClient`` needs the descriptors at
-    # runtime to derive the tRPC-style nested namespace.
-    entries_by_index = _flatten_namespace_entries(route_tree)
-    lines = ["export const _routes: ReadonlyArray<RouteDescriptor> = [\n"]
-    for i, route in enumerate(ir.routes):
-        lines.append(
-            _render_route_descriptor(route, route_names[i], entries_by_index[i], indent="  ")
-            + ",\n"
-        )
-    lines.append("];\n")
-    return "".join(lines)
+def _render_route_meta(
+    route: RouteIR,
+    route_name: str,
+    namespace: _NamespaceEntry,
+    *,
+    indent: str,
+) -> str:
+    parts = [
+        f"id: {json.dumps(route_name)}",
+        f"name: {json.dumps(route_name)}",
+        "segments: " + json.dumps(namespace["segments"]),
+        f"verb: {json.dumps(namespace['verb'])}",
+    ]
+    if route.params:
+        parts.append("hasArgs: true")
+    if route.streams:
+        parts.append("streams: true")
+    inline = indent + "{ " + ", ".join(parts) + " }"
+    if len(inline) <= _INLINE_LINE_BUDGET:
+        return inline
+    inner = indent + "  "
+    lines = [indent + "{"]
+    for p in parts:
+        lines.append(f"{inner}{p},")
+    lines.append(indent + "}")
+    return "\n".join(lines)
 
 
-def _render_enum_consts(ir: AppIR, name_map: dict[str, str]) -> str:
-    # `kind` is the msgspec tag discriminator — skipped intentionally so the
-    # union narrowing on `kind` stays as a string-literal, not a value-object lookup.
-    type_names = set(name_map.values())
-    used: set[str] = set()
-    consts: list[str] = []
-    for raw in sorted(ir.components):
-        props_any: Any = ir.components[raw].get("properties")
-        if not isinstance(props_any, dict):
-            continue
-        props = cast("dict[str, Any]", props_any)
-        struct_name = name_map.get(raw, _safe_ident(raw))
-        for field_name, schema in props.items():
-            if field_name == "kind" or not isinstance(schema, dict):
-                continue
-            values_any: Any = cast("dict[str, Any]", schema).get("enum")
-            if not isinstance(values_any, list):
-                continue
-            values = cast("list[Any]", values_any)  # type: ignore[redundant-cast]
-            if not all(isinstance(v, str) for v in values):
-                continue
-            str_values = cast("list[str]", values)
-            entries = ", ".join(f"{_pascal(v)}: {json.dumps(v)}" for v in str_values)
-            base = struct_name + _pascal(field_name)
-            const_name = _unique_enum_name(base, type_names, used)
-            used.add(const_name)
-            consts.append(f"export const {const_name} = {{ {entries} }} as const;\n")
-    return "\n".join(consts)
-
-
-def _unique_enum_name(base: str, type_names: set[str], used: set[str]) -> str:
-    if base not in type_names and base not in used and not _is_reserved(base):
-        return base
-    suffixed = f"{base}Enum"
-    if suffixed not in type_names and suffixed not in used and not _is_reserved(suffixed):
-        return suffixed
-    i = 2
-    while True:
-        candidate = f"{suffixed}_{i}"
-        if candidate not in type_names and candidate not in used:
-            return candidate
-        i += 1
+def _route_chunk_names(entries_by_index: dict[int, _NamespaceEntry]) -> dict[int, str]:
+    out: dict[int, str] = {}
+    for i, entry in entries_by_index.items():
+        raw = entry["segments"][0] if entry["segments"] else "root"
+        out[i] = _safe_ident(raw.lower())
+    return out
 
 
 def _render_routes_namespace(
@@ -251,7 +326,7 @@ def _render_routes_namespace(
     return "".join(out)
 
 
-# Names that must not appear as top-level type aliases or const declarations.
+# Names that must not appear as top-level type aliases or generated route symbols.
 _TS_RESERVED_TYPE_NAMES = frozenset(
     {
         "break",
@@ -316,7 +391,9 @@ _TS_RESERVED_TYPE_NAMES = frozenset(
         "Math",
         "Result",
         "CallOptions",
+        "LazyClientConfig",
         "RouteDescriptor",
+        "RouteMeta",
         "Routes",
         "JsonPrimitive",
         "JsonValue",
@@ -567,12 +644,39 @@ def _pascal(name: str) -> str:
     )
 
 
+_TS_FILE_SUFFIXES = {".ts", ".tsx", ".mts", ".cts"}
+
+
 def write(ir: AppIR, out: Path) -> None:
-    # Atomic: tmp + rename so the TS toolchain never reads a partial file.
-    tmp = out.with_suffix(out.suffix + ".tmp")
-    tmp.parent.mkdir(parents=True, exist_ok=True)
-    tmp.write_text(render(ir), encoding="utf-8")
-    tmp.replace(out)
+    if out.suffix in _TS_FILE_SUFFIXES:
+        raise ValueError(
+            "Dyadpy now generates an optimized client directory, not a single .ts file. "
+            f"Use a directory path such as {out.with_suffix('').as_posix()!r}.",
+        )
+
+    files = render(ir)
+    tmp = out.parent / f".{out.name}.tmp"
+    backup = out.parent / f".{out.name}.bak"
+    shutil.rmtree(tmp, ignore_errors=True)
+    shutil.rmtree(backup, ignore_errors=True)
+    tmp.mkdir(parents=True, exist_ok=True)
+    for rel, content in files.items():
+        target = tmp / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(content, encoding="utf-8")
+
+    out.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        if out.exists():
+            out.replace(backup)
+        tmp.replace(out)
+    except Exception:
+        if backup.exists() and not out.exists():
+            backup.replace(out)
+        raise
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+        shutil.rmtree(backup, ignore_errors=True)
 
 
 # ---- type rendering ----

@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import contextlib
 import inspect
+import logging
 import re
 import typing
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
@@ -28,6 +29,7 @@ from starlette.responses import JSONResponse, Response, StreamingResponse
 
 from dyadpy._pydantic import is_pydantic_model, to_jsonable
 from dyadpy._pydantic import validate as pydantic_validate
+from dyadpy._traceback import log_exception
 from dyadpy.context import Context, Dependency, current_context_var, run_after_callbacks
 from dyadpy.errors import exception_to_payload, get_declared_raises
 from dyadpy.params import Body, Form, Marker, ParamLocation, location_of
@@ -35,6 +37,7 @@ from dyadpy.streaming import encode_done, encode_frame, is_stream_annotation, st
 
 _MISSING: Any = object()
 _PATH_PARAM_RE = re.compile(r"\{([^}:]+)(?::[^}]+)?\}")
+_log = logging.getLogger("dyadpy.runtime")
 
 TeardownFn = Callable[[], Awaitable[None]]
 
@@ -251,6 +254,7 @@ class ValidationError(Exception):
         self.location = location
         self.field = field
         self.value = value
+        self.__suppress_context__ = True
 
 
 async def _read_value(
@@ -285,7 +289,7 @@ async def _read_value(
                     location=spec.location,
                     field=spec.alias,
                     value=raws,
-                ) from exc
+                ) from None
         raw = request.query_params.get(spec.alias)
         return _optional_or_convert(raw, spec)
     if spec.location == "header":
@@ -330,7 +334,7 @@ def _convert_body(value: Any, py_type: Any, *, alias: str | None = None) -> Any:
         return msgspec.convert(value, type=py_type, strict=False)
     except msgspec.ValidationError as exc:
         field, offending = _msgspec_field_and_value(value, str(exc), alias)
-        raise ValidationError(str(exc), location="body", field=field, value=offending) from exc
+        raise ValidationError(str(exc), location="body", field=field, value=offending) from None
     except Exception as exc:
         # Pydantic ValidationError lives outside our import chain; duck-type.
         first = _pydantic_first_error(exc)
@@ -341,7 +345,7 @@ def _convert_body(value: Any, py_type: Any, *, alias: str | None = None) -> Any:
                 location="body",
                 field=_join_pydantic_path(loc, alias),
                 value=first.get("input"),
-            ) from exc
+            ) from None
         raise
 
 
@@ -450,7 +454,7 @@ def _convert_primitive(raw: str | None, spec: ParamSpec) -> Any:
             location=spec.location,
             field=spec.alias,
             value=raw,
-        ) from exc
+        ) from None
 
 
 def _convert_query_value(raw: str, t: Any) -> Any:
@@ -474,8 +478,8 @@ def _convert_query_value(raw: str, t: Any) -> Any:
     except msgspec.ValidationError as first:
         try:
             return msgspec.json.decode(raw.encode(), type=t)
-        except (msgspec.DecodeError, msgspec.ValidationError) as fallback:
-            raise first from fallback
+        except (msgspec.DecodeError, msgspec.ValidationError):
+            raise first from None
 
 
 def _is_list_type(t: Any) -> bool:
@@ -586,15 +590,53 @@ def _build_response(result: Any, plan: HandlerPlan, ctx: Context | None) -> Resp
 def _build_error_response(exc: Exception, ctx: Context | None) -> Response:
     headers = _apply_ctx_headers(ctx, {})
     background = _ctx_background(ctx)
+    payload = exception_to_payload(exc)
+    request_id = _request_id(ctx)
+    if request_id is not None:
+        payload["request_id"] = request_id
     resp = Response(
-        content=_encode_json({"ok": False, "error": exception_to_payload(exc)}),
+        content=_encode_json({"ok": False, "error": payload}),
         media_type="application/json",
         headers=headers,
         background=background,
-        status_code=_ctx_status(ctx, 200),
+        status_code=_ctx_status(ctx, _error_status(exc)),
     )
     _apply_ctx_cookies(ctx, resp)
     return resp
+
+
+def _build_internal_error_response(ctx: Context | None, request: Request) -> Response:
+    headers = _apply_ctx_headers(ctx, {})
+    background = _ctx_background(ctx)
+    body: dict[str, Any] = {"detail": "internal server error"}
+    request_id = _request_id(ctx) or _request_id_from_request(request)
+    if request_id is not None:
+        body["request_id"] = request_id
+    resp = Response(
+        content=_encode_json(body),
+        media_type="application/json",
+        headers=headers,
+        background=background,
+        status_code=500,
+    )
+    _apply_ctx_cookies(ctx, resp)
+    return resp
+
+
+def _error_status(exc: Exception) -> int:
+    status = getattr(exc, "status", None)
+    return status if isinstance(status, int) and 100 <= status <= 599 else 200
+
+
+def _request_id(ctx: Context | None) -> str | None:
+    if ctx is None:
+        return None
+    return _request_id_from_request(ctx.request)
+
+
+def _request_id_from_request(request: Request) -> str | None:
+    request_id = getattr(request.state, "request_id", None)
+    return request_id if isinstance(request_id, str) else None
 
 
 @dataclass(slots=True)
@@ -646,7 +688,13 @@ class RouteRunner:
                 await _run_teardown(teardown)
                 return _build_error_response(exc, ctx_for_response)
             await _run_teardown(teardown)
-            raise
+            log_exception(
+                _log,
+                exc,
+                request=request,
+                request_id=_request_id(ctx_for_response) or _request_id_from_request(request),
+            )
+            return _build_internal_error_response(ctx_for_response, request)
         finally:
             if ctx_token is not None:
                 current_context_var.reset(ctx_token)
@@ -694,7 +742,7 @@ class RouteRunner:
                             location="body",
                             field=field,
                             value=offending,
-                        ) from exc
+                        ) from None
                 elif not body_spec.required:
                     fast_body_value = body_spec.default
                 else:
@@ -755,10 +803,23 @@ class RouteRunner:
             yield encode_done()
         except Exception as exc:
             if isinstance(exc, self.plan.raises):
-                yield b"event: error\ndata: " + _encode_json(exception_to_payload(exc)) + b"\n\n"
+                payload = exception_to_payload(exc)
+                request_id = _request_id_from_request(request)
+                if request_id is not None:
+                    payload["request_id"] = request_id
+                yield b"event: error\ndata: " + _encode_json(payload) + b"\n\n"
             else:
-                await _run_teardown(teardown)
-                raise
+                log_exception(
+                    _log,
+                    exc,
+                    request=request,
+                    request_id=_request_id_from_request(request),
+                )
+                payload = {"kind": "InternalError", "message": "internal server error"}
+                request_id = _request_id_from_request(request)
+                if request_id is not None:
+                    payload["request_id"] = request_id
+                yield b"event: error\ndata: " + _encode_json(payload) + b"\n\n"
         finally:
             await _run_teardown(teardown)
 

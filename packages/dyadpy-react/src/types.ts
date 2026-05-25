@@ -1,7 +1,5 @@
-// Generic-args helpers retained for backward compat with consumers that
-// authored their own thin wrappers around the dyadpy types. `createReactClient`
-// now maps the generated nested `ApiRoutes` type directly; these helpers remain
-// useful for standalone wrappers.
+// Small type helpers used by hook leaves. `createReactClient` maps the generated
+// nested `ApiRoutes` type directly.
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- generic over arbitrary callables
 type AnyFn = (...args: any[]) => any;

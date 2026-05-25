@@ -78,7 +78,7 @@ def test_pydantic_schema_in_ir_and_codegen() -> None:
     async def create(data: CreatePost) -> Post:
         return Post(id=1, title=data.title, body=data.body, tags=data.tags)
 
-    out = render(build_ir(app))
+    out = "\n".join(render(build_ir(app)).values())
     assert "export type CreatePost" in out
     assert "export type Post" in out
     assert "title: string" in out

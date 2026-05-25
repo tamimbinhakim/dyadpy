@@ -69,7 +69,7 @@ def test_bytes_marked_in_ir_and_codegen() -> None:
     assert by_name["blob"].binary_response is True
     assert by_name["upload"].binary_body is True
 
-    out = render(ir)
+    out = "\n".join(render(ir).values())
     assert "binaryResponse: true" in out
     assert "binaryBody: true" in out
 
@@ -284,5 +284,5 @@ def test_form_body_marked_in_ir_and_codegen() -> None:
 
     ir = build_ir(app)
     assert ir.routes[0].form_body is True
-    out = render(ir)
+    out = "\n".join(render(ir).values())
     assert "formBody: true" in out

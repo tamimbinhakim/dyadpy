@@ -1,6 +1,8 @@
 import { createRoot } from "solid-js";
 import { describe, expect, it, vi } from "vitest";
 
+import { DyadpyError } from "@dyadpy/ts";
+
 import { createDyadpyResources } from "../src/index.js";
 
 type Result<T, E> = { ok: true; data: T } | { ok: false; error: E };
@@ -45,13 +47,14 @@ describe("query resource", () => {
       const resources = createDyadpyResources({ getIssue } as unknown as TestApi);
       const r = resources.query("getIssue", () => ({ issueId: 99 }));
       const [, { refetch }] = r;
-      // Refetch throws but the error signal captures the typed shape
+      // Refetch throws but the error signal captures the typed shape on a real Error.
       try {
         await refetch();
       } catch {
         // Expected
       }
-      expect(r.error()).toEqual({ issueId: 99, kind: "IssueNotFound" });
+      expect(r.error()).toBeInstanceOf(DyadpyError);
+      expect(r.error()).toMatchObject({ issueId: 99, kind: "IssueNotFound" });
       dispose();
     });
   });

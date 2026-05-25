@@ -18,6 +18,10 @@ from dyadpy.ir import build_ir
 from dyadpy.params import Body, Header
 
 
+def _render_text(app: App) -> str:
+    return "\n".join(render(build_ir(app)).values())
+
+
 def test_build_ir_captures_routes() -> None:
     app = App()
 
@@ -38,7 +42,7 @@ def test_render_emits_header_and_routes() -> None:
     async def get_user(user_id: int) -> dict[str, int]:
         return {"id": user_id}
 
-    out = render(build_ir(app))
+    out = _render_text(app)
     assert "AUTO-GENERATED" in out
     assert "/users/{user_id}" in out
     assert '"GET"' in out
@@ -51,10 +55,22 @@ def test_write_creates_parent_dirs(tmp_path: Path) -> None:
     async def x() -> int:
         return 1
 
-    target = tmp_path / "nested" / "deep" / "client.ts"
+    target = tmp_path / "nested" / "deep" / "client"
     write(build_ir(app), target)
-    assert target.exists()
-    assert "AUTO-GENERATED" in target.read_text()
+    assert (target / "index.ts").exists()
+    assert (target / "types.d.ts").exists()
+    assert "AUTO-GENERATED" in (target / "index.ts").read_text()
+
+
+def test_write_rejects_single_file_output(tmp_path: Path) -> None:
+    app = App()
+
+    @app.get("/x")
+    async def x() -> int:
+        return 1
+
+    with pytest.raises(ValueError, match="client directory"):
+        write(build_ir(app), tmp_path / "client.ts")
 
 
 def test_struct_becomes_ts_type_declaration() -> None:
@@ -69,7 +85,7 @@ def test_struct_becomes_ts_type_declaration() -> None:
     async def create(data: CreatePost) -> CreatePost:
         return data
 
-    out = render(build_ir(app))
+    out = _render_text(app)
     assert "export type CreatePost" in out
     assert "title: string" in out
     assert "tags?: Array<string>" in out
@@ -85,7 +101,7 @@ def test_streaming_endpoint_emits_asynciterable() -> None:
     async def chat() -> stream[Token]:
         yield Token(text="hi")
 
-    out = render(build_ir(app))
+    out = _render_text(app)
     assert "AsyncIterable<Token>" in out
     assert "streams: true" in out
 
@@ -102,9 +118,10 @@ def test_raises_emits_result_envelope() -> None:
     async def get_post(post_id: int) -> dict[str, int]:
         return {"id": post_id}
 
-    out = render(build_ir(app))
+    out = _render_text(app)
     assert "Promise<Result<" in out
     assert "PostNotFound" in out
+    assert "requestId?: string | null" in out
     assert "result: true" in out
 
 
@@ -116,9 +133,9 @@ def test_result_import_omitted_when_no_route_raises() -> None:
     async def ping() -> str:
         return "pong"
 
-    out = render(build_ir(app))
-    assert 'import type { CallOptions, ClientConfig, RouteDescriptor } from "@dyadpy/ts";' in out
-    assert "Result" not in out
+    files = render(build_ir(app))
+    assert 'import type { CallOptions } from "@dyadpy/ts";' in files["types.d.ts"]
+    assert "Result" not in files["types.d.ts"]
 
 
 def test_result_import_omitted_for_streaming_only_raises() -> None:
@@ -138,9 +155,9 @@ def test_result_import_omitted_for_streaming_only_raises() -> None:
     async def watch(job_id: str) -> stream[Tick]:
         yield Tick(n=1)
 
-    out = render(build_ir(app))
-    assert 'import type { CallOptions, ClientConfig, RouteDescriptor } from "@dyadpy/ts";' in out
-    assert "Result<" not in out
+    files = render(build_ir(app))
+    assert 'import type { CallOptions } from "@dyadpy/ts";' in files["types.d.ts"]
+    assert "Result<" not in files["types.d.ts"]
 
 
 def test_result_import_present_when_any_route_raises() -> None:
@@ -159,11 +176,8 @@ def test_result_import_present_when_any_route_raises() -> None:
     async def get_thing(thing_id: int) -> dict[str, int]:
         return {"id": thing_id}
 
-    out = render(build_ir(app))
-    assert (
-        'import type { CallOptions, Result, ClientConfig, RouteDescriptor } from "@dyadpy/ts";'
-        in out
-    )
+    files = render(build_ir(app))
+    assert 'import type { CallOptions, Result } from "@dyadpy/ts";' in files["types.d.ts"]
 
 
 def test_render_emits_configurable_api_factory_for_ssr() -> None:
@@ -173,17 +187,20 @@ def test_render_emits_configurable_api_factory_for_ssr() -> None:
     async def get_user(user_id: int) -> dict[str, int]:
         return {"id": user_id}
 
-    out = render(build_ir(app))
-    assert out.startswith(
+    files = render(build_ir(app))
+    out = "\n".join(files.values())
+    assert files["index.ts"].startswith(
         "// @ts-nocheck\n/* eslint-disable */\n// biome-ignore-all lint: generated dyadpy client\n"
     )
-    assert 'export type ApiClientOptions = Omit<ClientConfig, "routes">' in out
-    assert "export interface ApiRoutes" in out
+    assert 'export type ApiClientOptions = Omit<LazyClientConfig, "routeMeta" | "loadRoute">' in out
+    assert "export interface ApiRoutes" in files["types.d.ts"]
     assert "users: {" in out
     assert "byId(args: { userId: number }, opts?: CallOptions)" in out
     assert "export function createApi(options: ApiClientOptions = {}): ApiRoutes" in out
-    assert "return createClient<ApiRoutes>({ ...options, routes: _routes })" in out
+    assert "return createLazyClient<ApiRoutes>({ ...options, routeMeta, loadRoute })" in out
     assert "export const api = createApi()" in out
+    assert "export const routeMeta: ReadonlyArray<RouteMeta>" in out
+    assert "export async function loadRoute" in out
     assert 'segments: ["users"]' in out
     assert 'verb: "byId"' in out
 
@@ -199,7 +216,7 @@ def test_descriptor_includes_param_locations() -> None:
     ) -> dict[str, str]:
         return {"user_id": str(user_id), "q": q, "trace": x_trace}
 
-    out = render(build_ir(app))
+    out = _render_text(app)
     assert 'in: "path"' in out
     assert 'in: "query"' in out
     assert 'in: "header"' in out
@@ -216,7 +233,7 @@ def test_embedded_body_params_marked_embed() -> None:
     ) -> dict[str, str]:
         return {"email": email, "pw_len": str(len(password))}
 
-    out = render(build_ir(app))
+    out = _render_text(app)
     assert out.count("embed: true") == 2
 
 
@@ -232,7 +249,7 @@ def test_route_namespace_emitted_for_unary_with_raises() -> None:
     async def get_post(post_id: int) -> dict[str, int]:
         return {"id": post_id}
 
-    out = render(build_ir(app))
+    out = _render_text(app)
     assert "export namespace Routes" in out
     assert "export namespace getPost" in out
     assert "export type Args = { postId: number }" in out
@@ -251,7 +268,7 @@ def test_route_namespace_for_streaming_endpoint() -> None:
     async def chat() -> stream[Token]:
         yield Token(text="hi")
 
-    out = render(build_ir(app))
+    out = _render_text(app)
     assert "export namespace chat" in out
     assert "export type Event = Token" in out
     assert "export type Return = AsyncIterable<Event>" in out
@@ -264,7 +281,7 @@ def test_mixed_param_path_segments_preserve_literal_namespace() -> None:
     async def export_csv(id: str) -> dict[str, str]:
         return {"id": id}
 
-    out = render(build_ir(app))
+    out = _render_text(app)
     assert "exports: {" in out
     assert "csv: {" in out
     assert "byId(args: { id: string }, opts?: CallOptions)" in out
@@ -272,7 +289,7 @@ def test_mixed_param_path_segments_preserve_literal_namespace() -> None:
     assert 'verb: "byId"' in out
 
 
-def test_enum_field_emits_const_value_object() -> None:
+def test_enum_field_stays_type_only() -> None:
     class Issue(msgspec.Struct):
         id: int
         status: Literal["open", "in_progress", "blocked", "closed"]
@@ -283,14 +300,12 @@ def test_enum_field_emits_const_value_object() -> None:
     async def get_issue(issue_id: int) -> Issue:
         return Issue(id=issue_id, status="open")
 
-    out = render(build_ir(app))
-    # The value-object exists at top-level…
-    assert "export const IssueStatus = " in out
-    # …with keys derived from the literal values, PascalCased.
-    assert "Open: " in out
-    assert "InProgress: " in out
-    assert "Blocked: " in out
-    assert "Closed: " in out
+    out = _render_text(app)
+    assert '| "open"' in out
+    assert '| "in_progress"' in out
+    assert '| "blocked"' in out
+    assert '| "closed"' in out
+    assert "export const IssueStatus = " not in out
 
 
 def test_kind_discriminator_skipped_for_enum_const() -> None:
@@ -308,7 +323,7 @@ def test_kind_discriminator_skipped_for_enum_const() -> None:
     async def evt() -> Foo | Bar:
         return Foo(x=1)
 
-    out = render(build_ir(app))
+    out = _render_text(app)
     # No `FooKind` / `BarKind` const should appear.
     assert "FooKind" not in out
     assert "BarKind" not in out
@@ -330,7 +345,7 @@ def test_large_struct_wraps_to_multi_line() -> None:
     async def big(data: BigStruct) -> BigStruct:
         return data
 
-    out = render(build_ir(app))
+    out = _render_text(app)
     assert "export type BigStruct = {\n  a: number;\n" in out
     # Trailing comma on the close brace's preceding line is preserved.
     assert "  e: number;\n};" in out
@@ -349,7 +364,7 @@ def test_small_struct_stays_inline() -> None:
     async def tiny(data: Tiny) -> Tiny:
         return data
 
-    out = render(build_ir(app))
+    out = _render_text(app)
     assert "export type Tiny = { a: number; b: string };" in out
 
 
@@ -361,7 +376,7 @@ def test_handler_docstring_not_emitted_as_jsdoc() -> None:
         """Health probe — returns the literal string ``pong``."""
         return "pong"
 
-    out = render(build_ir(app))
+    out = _render_text(app)
     assert "Health probe" not in out
     assert "list(opts?: CallOptions): Promise<string>;" in out
 
@@ -377,7 +392,7 @@ def test_multi_line_docstring_not_emitted_as_jsdoc() -> None:
         """
         return 1
 
-    out = render(build_ir(app))
+    out = _render_text(app)
     assert "First line." not in out
     assert "Second paragraph with extra detail." not in out
     assert "list(opts?: CallOptions): Promise<number>;" in out
@@ -395,7 +410,7 @@ def test_msgspec_auto_title_not_emitted_as_jsdoc() -> None:
     async def plain(data: Plain) -> Plain:
         return data
 
-    out = render(build_ir(app))
+    out = _render_text(app)
     # The redundant `/** Plain */` JSDoc above `export type Plain` must NOT appear.
     assert "/** Plain */\nexport type Plain" not in out
 
@@ -410,7 +425,7 @@ def test_unconstrained_object_type_is_not_never_record() -> None:
     async def payload(data: Payload) -> Payload:
         return data
 
-    out = render(build_ir(app))
+    out = _render_text(app)
     assert "export type JsonValue = JsonPrimitive | JsonObject | JsonValue[];" in out
     assert "metadata: JsonObject" in out
     assert "Record<string, never>" not in out
@@ -428,7 +443,7 @@ def test_struct_docstring_not_emitted_as_jsdoc() -> None:
     async def create(data: Thing) -> Thing:
         return data
 
-    out = render(build_ir(app))
+    out = _render_text(app)
     assert "A thing that lives in the system." not in out
     assert "export type Thing" in out
 
@@ -446,10 +461,10 @@ def test_route_descriptor_wraps_when_long() -> None:
     ) -> list[dict[str, int]]:
         return []
 
-    out = render(build_ir(app))
+    out = _render_text(app)
     # The multi-param list should wrap with item-per-line and trailing commas.
-    assert 'params: [\n      { name: "tag",' in out
-    assert "    ],\n  }," in out
+    assert 'params: [\n    { name: "tag",' in out
+    assert "  ],\n};" in out
 
 
 def test_long_method_signature_wraps_args() -> None:
@@ -467,7 +482,7 @@ def test_long_method_signature_wraps_args() -> None:
     ) -> list[dict[str, str]]:
         return []
 
-    out = render(build_ir(app))
+    out = _render_text(app)
     # Args + opts wrap to their own lines once the inline form exceeds 100 cols.
     assert "list(\n      args:" in out
     assert "opts?: CallOptions,\n    )" in out
@@ -485,7 +500,7 @@ def test_struct_named_array_gets_renamed_to_avoid_shadowing_builtin() -> None:
     async def arr(data: Array) -> Array:
         return data
 
-    out = render(build_ir(app))
+    out = _render_text(app)
     assert "export type Array =" not in out
     # The render path always uses the disambiguated name, both for the type
     # declaration and at every reference site — so no orphaned `Array` refs.
@@ -504,7 +519,7 @@ def test_struct_named_delete_gets_renamed() -> None:
     async def d(data: delete) -> delete:
         return data
 
-    out = render(build_ir(app))
+    out = _render_text(app)
     assert "export type delete " not in out
 
 
@@ -539,7 +554,7 @@ def test_duplicate_route_names_are_path_qualified() -> None:
     show_account.__name__ = "show"
     show_customer.__name__ = "show"
 
-    out = render(build_ir(app))
+    out = _render_text(app)
     assert "accounts: {" in out
     assert "customers: {" in out
     assert "byId(args: { id: string }, opts?: CallOptions): Promise<Record<string, string>>;" in out
@@ -553,9 +568,7 @@ def test_duplicate_route_names_are_path_qualified() -> None:
     assert 'name: "show"' not in out
 
 
-def test_enum_const_collision_with_type_name_gets_enum_suffix() -> None:
-    """If ``UserRole`` is already a user-defined type, the enum const becomes ``UserRoleEnum``."""
-
+def test_enum_literals_do_not_emit_runtime_values() -> None:
     class UserRole(msgspec.Struct):
         slug: str
 
@@ -573,16 +586,12 @@ def test_enum_const_collision_with_type_name_gets_enum_suffix() -> None:
     async def list_roles() -> list[UserRole]:
         return []
 
-    out = render(build_ir(app))
+    out = _render_text(app)
     assert "export type UserRole =" in out  # User struct keeps its name.
-    # Enum const renamed to avoid clobbering the type.
-    assert "export const UserRoleEnum = " in out
     assert "export const UserRole = " not in out
 
 
-def test_duplicate_enum_const_names_get_numeric_suffix() -> None:
-    """Two structs that both produce a ``StatusValue`` const each get unique names."""
-
+def test_duplicate_enum_literal_fields_stay_type_only() -> None:
     class A(msgspec.Struct):
         status: Literal["a", "b"]
 
@@ -599,10 +608,11 @@ def test_duplicate_enum_const_names_get_numeric_suffix() -> None:
     async def bb() -> B:
         return B(status="c")
 
-    out = render(build_ir(app))
-    # Both structs get their own status const, distinct names.
-    assert "export const AStatus = " in out
-    assert "export const BStatus = " in out
+    out = _render_text(app)
+    assert 'status: "a" | "b"' in out
+    assert 'status: "c" | "d"' in out
+    assert "export const AStatus = " not in out
+    assert "export const BStatus = " not in out
 
 
 def test_exact_optional_vs_nullable() -> None:
@@ -620,7 +630,7 @@ def test_exact_optional_vs_nullable() -> None:
     async def mixed(data: Mixed) -> Mixed:
         return data
 
-    out = render(build_ir(app))
+    out = _render_text(app)
     # Order in msgspec output may vary; check each shape appears.
     assert "a: number" in out
     assert "a?: number" not in out
@@ -671,7 +681,7 @@ def test_generic_struct_with_exception_in_type_args() -> None:
     async def bulk(items: list[_GenItem]) -> _GenBatchOut[_GenItem, _GenBadRequest]:
         return _GenBatchOut(ok=[], failed=[])
 
-    out = render(build_ir(app))
+    out = _render_text(app)
     # The generic parameterization reaches the components map; the error's
     # synthesized tagged Struct surfaces inline so the TS client can narrow
     # on ``error.kind``.

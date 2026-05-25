@@ -16,16 +16,16 @@ your Python handlers
     AppIR  ──►  ASGI runtime  ──►  HTTP / SSE
         │
         ▼
-    Codegen        (IR → single client.ts)
+    Codegen        (IR → generated client/)
         │
         ▼
-your frontend's src/lib/dyadpy/client.ts
+your frontend's src/lib/dyadpy/client/
         │
         ▼
     @dyadpy/ts    (~3 KB runtime, nested dispatch + SSE)
 ```
 
-Two flows: **server start** rebuilds the IR and writes `client.ts`; **at
+Two flows: **server start** rebuilds the IR and writes `client/`; **at
 request time** the ASGI runtime decodes via msgspec, calls your handler,
 encodes the response.
 
@@ -79,12 +79,16 @@ For each request:
    handlers, wrap in `EventSourceResponse` and yield tagged frames.
 
 For typed errors: if the handler raises one of the exceptions declared in
-`@raises(...)`, the runtime wraps it in the `Result` envelope. Anything else
-becomes a 500 and is logged.
+`@raises(...)`, the runtime wraps it in the `Result` envelope. Exceptions with
+a numeric `status` attribute use that HTTP status; otherwise the compatibility
+default is 200. `request.state.request_id`, when present, is copied onto the
+error payload. Anything undeclared is not converted into `Result`; it logs a
+compact server-side traceback and returns a scrubbed 500 payload with the same
+request id when available.
 
 ### 4. Codegen (`dyadpy/codegen.py`)
 
-Codegen reads an `AppIR` and emits one TypeScript file. The strategy:
+Codegen reads an `AppIR` and emits an optimized TypeScript client directory. The strategy:
 
 - **Types**: every msgspec `Struct` / `TypedDict` / `dataclass` becomes a
   `type` declaration; shared types are deduped via the components map.
@@ -94,31 +98,41 @@ Codegen reads an `AppIR` and emits one TypeScript file. The strategy:
   `AsyncIterable<T>` (or, for tagged unions, the narrowed shape).
 - **Errors**: `@raises(A, B)` becomes `Result<T, A | B>`. The client is
   forced to handle the typed cases.
-- **The client object**: a `createClient<ApiRoutes>({ routes: [...] })`
-  call builds the same nested object that `ApiRoutes` describes, so calls
-  like `api.users.byId` are static in TypeScript and real properties at
-  runtime.
+- **The client object**: `index.ts` calls `createLazyClient<ApiRoutes>({ routeMeta, loadRoute })`
+  to build the same nested object that `ApiRoutes` describes, so calls like
+  `api.users.byId` are static in TypeScript and real properties at runtime.
+- **Runtime splitting**: `meta.ts` contains only small route metadata; full
+  descriptors live under `routes/` and are loaded on the first call to each
+  route.
 
-The output is **one** file. Not a `client/` directory. Not 12 `*.types.ts`
-files. One file you import.
+The public import is still one path: `@/lib/dyadpy/client`. Under that path,
+the generated folder keeps types and descriptors separate so tools like
+Turbopack do not transform a huge single module for every page.
 
 ### 5. The dev loop (`dyadpy/cli.py` + `watchfiles`)
 
-`dyadpy dev` does three things in one process:
+`dyadpy dev` owns the development server instead of delegating reloads to a
+child process:
 
-1. Spawn uvicorn with reload enabled (so handler edits hot-reload).
-2. Watch `*.py` with `watchfiles` and rerun IR extraction on change.
-3. Write the codegen output to the configured path atomically (write tmp →
+1. Start uvicorn once around a hot-swappable ASGI wrapper.
+2. Watch `*.py` with `watchfiles`.
+3. On change, evict app-local modules, reload the target app, rebuild IR, and
+   write the codegen output atomically (write tmp →
    `rename`) so your TS toolchain never reads a half-written file.
+4. Swap the new app snapshot in only after the rebuild succeeds. Existing
+   requests continue on the previous snapshot; failed reloads keep serving the
+   last good app.
 
-Everything is logged with `rich` so the terminal stays readable.
+Everything is logged with `rich` so the terminal stays readable: changed files,
+reload timing, route count, concise failures, and request lines.
 
 ### 6. The TS runtime (`@dyadpy/ts`)
 
 The runtime is ~3 KB min+gz. It exports:
 
-- `createClient<TApi>(config)` → a nested object that dispatches
-  `api.<namespace>.<verb>(...)` to the matching route in the config.
+- `createLazyClient<TApi>(config)` → a nested object that dispatches
+  `api.<namespace>.<verb>(...)` after lazily loading the matching route
+  descriptor.
 - `parseSSE(stream)` → a minimal SSE parser. Used by the generated client
   to turn `fetch().body` into a typed `AsyncIterable<TEvent>`.
 - `Result<T, E>` / `Ok<R>` / `Err<R>` → the envelope type and the helpers
@@ -147,10 +161,11 @@ most server-push protocols have standardized on it. WS opens you up to
 bidirectional state-management complexity that most apps don't need. WS is
 on the roadmap (`bidi[Send, Recv]`) for the cases that actually want it.
 
-**Why a route table instead of generated fetch functions?**
-The generated file stays small: static interfaces describe the nested dot
-path, while the route table lets the runtime build the matching object and
-share one request implementation for JSON, forms, files, bytes, and SSE.
+**Why lazy route chunks instead of generated fetch functions?**
+Static interfaces describe the nested dot path, while route metadata lets the
+runtime build the matching object and share one request implementation for
+JSON, forms, files, bytes, and SSE. The heavy descriptor data is split by route
+namespace and loaded only when a call needs it.
 
 ## Where to read the code
 

@@ -47,7 +47,10 @@ def get_declared_raises(handler: object) -> tuple[type[Exception], ...]:
 def exception_to_payload(exc: Exception) -> dict[str, Any]:
     """Serialize an exception to ``{ "kind": ClassName, ...fields }``.
 
-    Tries, in order: ``exc.to_dict()`` → ``dataclasses.asdict`` → ``__dict__`` → ``str(exc)``.
+    Tries, in order: ``exc.to_dict()`` → ``dataclasses.asdict`` →
+    ``__dict__`` → ``str(exc)``. Class-level ``status`` / ``code`` style
+    metadata is copied in too, so framework errors can keep one typed payload
+    shape without forcing every instance to repeat constants.
     """
     body: dict[str, Any]
     to_dict: Any = getattr(exc, "to_dict", None)
@@ -60,7 +63,18 @@ def exception_to_payload(exc: Exception) -> dict[str, Any]:
         body = {k: v for k, v in exc.__dict__.items() if not k.startswith("_")}
     else:
         body = {"message": str(exc)}
+    _merge_class_metadata(exc, body)
     return {"kind": type(exc).__name__, **body}
+
+
+def _merge_class_metadata(exc: Exception, body: dict[str, Any]) -> None:
+    for name in ("status", "code"):
+        if name in body:
+            continue
+        value = getattr(exc, name, None)
+        if value is None or callable(value):
+            continue
+        body[name] = value
 
 
 def _is_dataclass_instance(obj: object) -> bool:

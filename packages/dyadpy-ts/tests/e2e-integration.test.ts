@@ -3,8 +3,8 @@
 
 import { describe, expect, it } from "vitest";
 
-import { createClient } from "../src/index.js";
-import type { RouteDescriptor } from "../src/index.js";
+import { createLazyClient } from "../src/index.js";
+import type { RouteDescriptor, RouteMeta } from "../src/index.js";
 
 type FetchImpl = typeof globalThis.fetch;
 
@@ -87,6 +87,19 @@ const ROUTES = [
     streams: true,
   },
 ] as const satisfies ReadonlyArray<RouteDescriptor>;
+
+function routeMeta(route: RouteDescriptor): RouteMeta {
+  return {
+    id: route.name,
+    name: route.name,
+    segments: route.segments,
+    verb: route.verb,
+    ...((route.params?.length ?? 0) > 0 ? { hasArgs: true } : {}),
+    ...(route.streams ? { streams: true } : {}),
+  };
+}
+
+const ROUTE_META: RouteMeta[] = ROUTES.map(routeMeta);
 
 type Api = {
   me: {
@@ -231,14 +244,23 @@ function json(body: unknown): Response {
   });
 }
 
+function createApi(fetch: FetchImpl): Api {
+  return createLazyClient<Api>({
+    routeMeta: ROUTE_META,
+    loadRoute: (id) => {
+      const route = ROUTES.find((item) => item.name === id);
+      if (route === undefined) throw new Error(id);
+      return route;
+    },
+    fetch,
+    baseUrl: "http://test",
+  });
+}
+
 describe("e2e integration — generated-client surface against a Dyadpy-shaped mock server", () => {
   it("unary GET with header param + snake→camel response translation", async () => {
     const server = makeServer();
-    const api = createClient<Api>({
-      routes: ROUTES,
-      fetch: server.fetch,
-      baseUrl: "http://test",
-    });
+    const api = createApi(server.fetch);
 
     const me = await api.me.list({ authorization: "Bearer tok" });
     expect(me).toEqual({ id: 1, email: "a@x.com", createdAt: "2025-01-01" });
@@ -248,11 +270,7 @@ describe("e2e integration — generated-client surface against a Dyadpy-shaped m
 
   it("path-param GET with Result envelope (ok branch)", async () => {
     const server = makeServer();
-    const api = createClient<Api>({
-      routes: ROUTES,
-      fetch: server.fetch,
-      baseUrl: "http://test",
-    });
+    const api = createApi(server.fetch);
 
     const r = await api.posts.byId({ postId: 42 });
     expect(r.ok).toBe(true);
@@ -261,11 +279,7 @@ describe("e2e integration — generated-client surface against a Dyadpy-shaped m
 
   it("path-param GET with Result envelope (err branch — typed)", async () => {
     const server = makeServer();
-    const api = createClient<Api>({
-      routes: ROUTES,
-      fetch: server.fetch,
-      baseUrl: "http://test",
-    });
+    const api = createApi(server.fetch);
 
     const r = await api.posts.byId({ postId: 404 });
     expect(r.ok).toBe(false);
@@ -277,11 +291,7 @@ describe("e2e integration — generated-client surface against a Dyadpy-shaped m
 
   it("POST body with camel→snake translation", async () => {
     const server = makeServer();
-    const api = createClient<Api>({
-      routes: ROUTES,
-      fetch: server.fetch,
-      baseUrl: "http://test",
-    });
+    const api = createApi(server.fetch);
 
     const r = await api.posts.create({ data: { title: "hi", bodyText: "world" } });
     expect(r).toEqual({ id: 1 });
@@ -291,11 +301,7 @@ describe("e2e integration — generated-client surface against a Dyadpy-shaped m
 
   it("repeated query param expands to `?tag=a&tag=b`", async () => {
     const server = makeServer();
-    const api = createClient<Api>({
-      routes: ROUTES,
-      fetch: server.fetch,
-      baseUrl: "http://test",
-    });
+    const api = createApi(server.fetch);
 
     const r = await api.posts.list({ tag: ["red", "blue"] });
     expect(r).toEqual([
@@ -308,11 +314,7 @@ describe("e2e integration — generated-client surface against a Dyadpy-shaped m
 
   it("multipart file upload uses FormData and lets fetch pick the boundary", async () => {
     const server = makeServer();
-    const api = createClient<Api>({
-      routes: ROUTES,
-      fetch: server.fetch,
-      baseUrl: "http://test",
-    });
+    const api = createApi(server.fetch);
 
     const blob = new Blob([new Uint8Array([1, 2, 3, 4, 5])]);
     const r = await api.avatar.create({ file: blob });
@@ -324,11 +326,7 @@ describe("e2e integration — generated-client surface against a Dyadpy-shaped m
 
   it("formBody routes encode as application/x-www-form-urlencoded with snake_case keys", async () => {
     const server = makeServer();
-    const api = createClient<Api>({
-      routes: ROUTES,
-      fetch: server.fetch,
-      baseUrl: "http://test",
-    });
+    const api = createApi(server.fetch);
 
     const r = await api.login.create({ form: { email: "a@x.com", password: "hunter2" } });
     expect(r.token).toBe("tok-1");
@@ -337,11 +335,7 @@ describe("e2e integration — generated-client surface against a Dyadpy-shaped m
 
   it("binaryBody routes pass raw bytes through unmodified", async () => {
     const server = makeServer();
-    const api = createClient<Api>({
-      routes: ROUTES,
-      fetch: server.fetch,
-      baseUrl: "http://test",
-    });
+    const api = createApi(server.fetch);
 
     const payload = new Uint8Array([222, 173, 190, 239]);
     const r = (await api.webhooks.stripe.create({ body: payload })) as { bytes: number };
@@ -350,11 +344,7 @@ describe("e2e integration — generated-client surface against a Dyadpy-shaped m
 
   it("binaryResponse routes hand back a Blob", async () => {
     const server = makeServer();
-    const api = createClient<Api>({
-      routes: ROUTES,
-      fetch: server.fetch,
-      baseUrl: "http://test",
-    });
+    const api = createApi(server.fetch);
 
     const blob = await api.exports.csv.byId({ id: "abc" });
     expect(blob).toBeInstanceOf(Blob);
@@ -364,11 +354,7 @@ describe("e2e integration — generated-client surface against a Dyadpy-shaped m
 
   it("streaming route parses SSE frames into AsyncIterable<T>", async () => {
     const server = makeServer();
-    const api = createClient<Api>({
-      routes: ROUTES,
-      fetch: server.fetch,
-      baseUrl: "http://test",
-    });
+    const api = createApi(server.fetch);
 
     const seen: unknown[] = [];
     for await (const ev of api.feed.list({ count: 3 })) {
@@ -407,7 +393,7 @@ describe("e2e integration — generated-client surface against a Dyadpy-shaped m
       });
     };
 
-    const api = createClient<Api>({ routes: ROUTES, fetch: slowFetch, baseUrl: "http://test" });
+    const api = createApi(slowFetch);
     const ac = new AbortController();
     const seen: unknown[] = [];
     for await (const ev of api.feed.list({ count: 100 }, { signal: ac.signal })) {

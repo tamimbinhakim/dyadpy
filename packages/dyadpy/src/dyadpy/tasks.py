@@ -205,7 +205,7 @@ def mount_task_routes(
     async def status(task_id: str) -> TaskState[Any]:
         try:
             return await backend.status(task_id)
-        except KeyError as exc:
+        except KeyError:
             from dyadpy.runtime import ValidationError
 
             raise ValidationError(
@@ -213,7 +213,7 @@ def mount_task_routes(
                 location="path",
                 field="task_id",
                 value=task_id,
-            ) from exc
+            ) from None
 
     status.__name__ = f"status_{handler.__name__}"
     status.__qualname__ = status.__name__
@@ -222,7 +222,7 @@ def mount_task_routes(
     async def events(task_id: str) -> AsyncIterator[TaskState[Any]]:
         try:
             iterator = backend.stream(task_id)
-        except KeyError as exc:
+        except KeyError:
             from dyadpy.runtime import ValidationError
 
             raise ValidationError(
@@ -230,7 +230,7 @@ def mount_task_routes(
                 location="path",
                 field="task_id",
                 value=task_id,
-            ) from exc
+            ) from None
         async for state in iterator:
             yield state
 

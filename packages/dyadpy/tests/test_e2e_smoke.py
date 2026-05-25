@@ -336,14 +336,16 @@ def test_codegen_for_smoke_app_renders_every_section(app: App) -> None:
     from dyadpy.codegen import render
     from dyadpy.ir import build_ir
 
-    out = render(build_ir(app))
+    files = render(build_ir(app))
+    out = "\n".join(files.values())
 
     assert "AUTO-GENERATED" in out
     assert 'from "@dyadpy/ts"' in out
-    assert "Result," in out
+    assert "Result" in files["types.d.ts"]
 
     assert "export interface ApiRoutes" in out
-    assert "export const _routes: ReadonlyArray<RouteDescriptor>" in out
+    assert "export const routeMeta: ReadonlyArray<RouteMeta>" in out
+    assert "export async function loadRoute" in out
     assert "export namespace Routes" in out
 
     for name in ("User", "CreatePost", "Post", "Session", "LoginForm", "Tick", "Done"):

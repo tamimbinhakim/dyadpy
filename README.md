@@ -40,7 +40,9 @@ const user = await api.users.byId({ userId: 1 });
 //    ^? User — full type, autocomplete, refactor-safe
 ```
 
-That's the whole loop. `dyadpy dev` rewrites `client.ts` every time you save Python, so the TS side is always in sync.
+That's the whole loop. `dyadpy dev` hot-swaps the app after successful Python
+edits and rewrites the generated client directory, so the TS side is always in
+sync without a process restart on every save.
 
 ## Why you'd use it
 
@@ -48,7 +50,7 @@ That's the whole loop. `dyadpy dev` rewrites `client.ts` every time you save Pyt
 - **Nested route calls that read like resources.** `api.users.byId(...)` — not `createPostPostsPost`.
 - **Typed streaming out of the box.** `stream[T]` becomes `AsyncIterable<T>` on the client, with auto-reconnect on drop.
 - **Typed errors as discriminated unions.** `@raises(NotFound, Forbidden)` → `Result<T, NotFound | Forbidden>`. The compiler forces you to handle each case.
-- **One file, not twelve.** The generated client is a single `client.ts` you can read, diff, and grep.
+- **Tiny entry, lazy route chunks.** Importing `api` loads a small `client/index.ts` plus route metadata; full descriptors live in route chunks and load only when a route is called.
 - **Framework-agnostic on both ends.** Python web framework: dyadpy (Starlette under the hood). Frontend: anything that runs TS — Next.js, Vite, SvelteKit, Astro, Solid Start.
 - **First-class hooks for the big three.** `@dyadpy/react` (TanStack Query), `@dyadpy/svelte` (stores), `@dyadpy/solid` (resources). Server-side prefetch helpers ship with each.
 - **Fast.** msgspec on the hot path — 2–30× faster than Pydantic v2 on decode/encode. Pydantic still ships as a first-class plugin (`dyadpy[pydantic]`).
@@ -117,9 +119,9 @@ for await (const log of api.build.events.list({ id: 42 })) {
 }
 ```
 
-**One file you can read.** The generated client is a single `client.ts` — diff it in PRs, grep it for routes, paste it into a gist. Not a black-box artifact buried in `node_modules`.
+**Generated code you can inspect.** The generated `client/` directory keeps the public entry small (`index.ts`), declarations separate (`types.d.ts`), and runtime descriptors split under `routes/`. You can still diff and grep it, but bundlers no longer transform the whole API graph for every importer.
 
-**No codegen step in your head.** No `pnpm gen`, no `buf gen`, no `npm run codegen` to remember. `dyadpy dev` watches Python and writes the client atomically. If it's in your editor, it's in the client.
+**No codegen step in your head.** No `pnpm gen`, no `buf gen`, no `npm run codegen` to remember. `dyadpy dev` watches Python, keeps the last good app serving on failed reloads, and writes the client atomically. If it's in your editor, it's in the client.
 
 Full primitives in [`docs/reference.md`](./docs/reference.md).
 
@@ -143,13 +145,13 @@ pnpm add @dyadpy/react@alpha   # or @dyadpy/svelte@alpha / @dyadpy/solid@alpha
 ## Run
 
 ```bash
-dyadpy dev server.app:app --out ../frontend/src/lib/dyadpy/client.ts
+dyadpy dev server.app:app --out ../frontend/src/lib/dyadpy/client
 ```
 
 What that does:
 
 1. Starts your ASGI app on `http://127.0.0.1:8000`.
-2. Watches `*.py`. On save, regenerates `client.ts` atomically into your frontend.
+2. Watches `*.py`. On save, regenerates the `client/` directory atomically into your frontend.
 3. Your TS toolchain hot-reloads on the new file.
 
 That's it. Walkthrough in [docs/getting-started.md](./docs/getting-started.md).

@@ -5,9 +5,11 @@
 from __future__ import annotations
 
 import msgspec
+import pytest
 from starlette.testclient import TestClient
 
 from dyadpy import App
+from dyadpy.runtime import ParamSpec, ValidationError, _convert_primitive
 
 
 class Inner(msgspec.Struct):
@@ -162,3 +164,20 @@ def test_bad_bool_query_param_returns_422() -> None:
     assert body["location"] == "query"
     assert body["field"] == "active"
     assert body["value"] == "maybe"
+
+
+def test_validation_error_suppresses_parser_context() -> None:
+    spec = ParamSpec(
+        name="active",
+        alias="active",
+        location="query",
+        py_type=bool,
+        required=True,
+        default=None,
+    )
+
+    with pytest.raises(ValidationError) as exc_info:
+        _convert_primitive("maybe", spec)
+
+    assert exc_info.value.__cause__ is None
+    assert exc_info.value.__suppress_context__ is True

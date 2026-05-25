@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       path:
-        description: "Ad-hoc: package path under packages/ (e.g. dyadpy). Reads version from pyproject.toml, publishes to PyPI, tags, creates a GitHub release."
+        description: "Ad-hoc: package path under packages/ (e.g. dyadpy, dyadpy-ts). Detects PyPI vs npm, publishes, tags, creates a GitHub release."
         required: true
         default: "dyadpy"
         type: string
@@ -16,9 +16,23 @@ permissions:
   contents: read
 
 jobs:
+  version-guard:
+    name: Version guard
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.0
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.0.0
+        with:
+          python-version: "3.13"
+      - run: python scripts/check_versions.py
+
   release-please:
     name: release-please
     if: github.event_name == 'push'
+    needs: version-guard
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -76,36 +90,93 @@ jobs:
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.0.0
         with:
           python-version: "3.13"
+      - uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.0.0
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
 
-      - name: Read version
-        id: ver
-        working-directory: packages/${{ inputs.path }}
+      - name: Read package metadata
+        id: meta
         run: |
           set -euo pipefail
-          VERSION=$(grep -m1 '^version = ' pyproject.toml | sed -E 's/version = "(.+)"/\1/')
+          PACKAGE_DIR="packages/${{ inputs.path }}"
+          if [ -f "$PACKAGE_DIR/pyproject.toml" ]; then
+            KIND="python"
+            NAME=$(python - "$PACKAGE_DIR/pyproject.toml" <<'PY'
+          import sys, tomllib
+          data = tomllib.load(open(sys.argv[1], "rb"))
+          print(data["project"]["name"])
+          PY
+            )
+            VERSION=$(python - "$PACKAGE_DIR/pyproject.toml" <<'PY'
+          import sys, tomllib
+          data = tomllib.load(open(sys.argv[1], "rb"))
+          print(data["project"]["version"])
+          PY
+            )
+          elif [ -f "$PACKAGE_DIR/package.json" ]; then
+            KIND="npm"
+            NAME=$(node -p "require('./$PACKAGE_DIR/package.json').name")
+            VERSION=$(node -p "require('./$PACKAGE_DIR/package.json').version")
+          else
+            echo "No pyproject.toml or package.json in $PACKAGE_DIR" >&2
+            exit 1
+          fi
+          COMPONENT=$(python - "$PACKAGE_DIR" <<'PY'
+          import json, sys
+          config = json.load(open("release-please-config.json", encoding="utf-8"))
+          path = sys.argv[1]
+          print(config["packages"][path].get("component", path.rsplit("/", 1)[-1]))
+          PY
+          )
+          echo "kind=$KIND" >> "$GITHUB_OUTPUT"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "component=$COMPONENT" >> "$GITHUB_OUTPUT"
 
-      - name: Build
+      - name: Check version and tag
+        run: python scripts/check_versions.py --package packages/${{ inputs.path }} --check-tag-available
+
+      - name: Build Python package
+        if: steps.meta.outputs.kind == 'python'
         working-directory: packages/${{ inputs.path }}
         run: uv build
 
       - uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # release/v1
+        if: steps.meta.outputs.kind == 'python'
         with:
           packages-dir: packages/${{ inputs.path }}/dist
+
+      - name: Build npm package
+        if: steps.meta.outputs.kind == 'npm'
+        run: |
+          set -euo pipefail
+          pnpm install --frozen-lockfile
+          pnpm --filter @dyadpy/ts build
+          pnpm --filter "${{ steps.meta.outputs.name }}" build
+
+      - name: Publish npm package
+        if: steps.meta.outputs.kind == 'npm'
+        working-directory: packages/${{ inputs.path }}
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Tag and release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          NAME="${{ inputs.path }}"
-          VERSION="${{ steps.ver.outputs.version }}"
-          TAG="${NAME}-v${VERSION}"
+          NAME="${{ steps.meta.outputs.name }}"
+          VERSION="${{ steps.meta.outputs.version }}"
+          TAG="${{ steps.meta.outputs.component }}-v${VERSION}"
           git tag "$TAG"
           git push origin "$TAG"
           gh release create "$TAG" \
             --title "$TAG" \
-            --notes "Release of \`$NAME\` $VERSION. See packages/$NAME/CHANGELOG.md." \
+            --notes "Release of \`$NAME\` $VERSION. See packages/${{ inputs.path }}/CHANGELOG.md." \
             --target main
 
   publish-npm-ts:

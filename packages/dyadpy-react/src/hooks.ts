@@ -2,11 +2,11 @@
  * React hooks for Dyadpy clients.
  *
  * Single public entry: {@link createReactClient}. Pass the generated
- * `createApi(...)` result and the generated `_routes` array; get back a
+ * `createApi(...)` result and the generated `routeMeta` array; get back a
  * tRPC-style nested namespace:
  *
  * ```ts
- * const api = createReactClient(apiClient, _routes);
+ * const api = createReactClient(apiClient, routeMeta);
  *
  * api.customers.list.useQuery({ limit: 50 });
  * api.customers.byId.useQuery({ id });
@@ -15,7 +15,7 @@
  * api.notifications.stream.useSubscription(args, { onEvent });
  * ```
  *
- * Naming is generated once by Dyadpy and carried through `_routes`; React
+ * Naming is generated once by Dyadpy and carried through `routeMeta`; React
  * uses that generated namespace directly.
  */
 
@@ -37,7 +37,7 @@ import type {
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { buildNamespaceTree } from "./proxy.js";
-import type { NamespaceEntry, ProxyRouteDescriptor, TreeNode } from "./proxy.js";
+import type { NamespaceEntry, ReactRouteMeta, TreeNode } from "./proxy.js";
 import type { StreamItemOf, SubscriptionStatus } from "./types.js";
 import type { CallOptions, Err } from "@dyadpy/ts";
 
@@ -49,10 +49,10 @@ type Unary = (args?: unknown, opts?: { signal?: AbortSignal }) => Promise<unknow
 type Stream = (args?: unknown, opts?: { signal?: AbortSignal }) => AsyncIterable<unknown>;
 // Generated route functions have concrete argument tuples. Keep this broad so
 // conditional types preserve those tuples instead of collapsing optional args.
-type AnyRouteFn = (...args: any[]) => unknown;
+type AnyRouteFn = (...args: never[]) => unknown;
 type QueryKey = readonly unknown[];
 
-type AwaitedReturn<F> = F extends (...args: any[]) => infer R ? Awaited<R> : never;
+type AwaitedReturn<F> = F extends (...args: never[]) => infer R ? Awaited<R> : never;
 type ResultData<T> = T extends { ok: true; data: infer D } ? D : never;
 type UnwrappedData<F> = [ResultData<AwaitedReturn<F>>] extends [never]
   ? AwaitedReturn<F>
@@ -132,7 +132,7 @@ export type ReactLeaf<F> = {
   useMutation: (
     options?: MutationOptionInput<F>,
   ) => UseMutationResult<UnwrappedData<F>, RouteError<F>, MutationVars<F>>;
-  useSubscription: F extends (...args: any[]) => AsyncIterable<infer TEvent>
+  useSubscription: F extends (...args: never[]) => AsyncIterable<infer TEvent>
     ? WithOptionalArgs<F, UseDyadpySubscriptionOptions<TEvent>, UseDyadpySubscriptionResult>
     : never;
 };
@@ -160,7 +160,7 @@ export type ReactClient<TApi extends object> = {
 
 export function createReactClient<TApi extends object>(
   api: TApi,
-  routes: readonly ProxyRouteDescriptor[],
+  routes: readonly ReactRouteMeta[],
 ): ReactClient<TApi> {
   // ---- internal helpers (closure-scoped; not exported) ---------------------
 

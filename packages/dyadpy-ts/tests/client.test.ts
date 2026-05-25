@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createClient } from "../src/client.js";
-import type { RouteDescriptor } from "../src/types.js";
+import { createLazyClient } from "../src/client.js";
+import type { RouteDescriptor, RouteMeta } from "../src/types.js";
 
 const routes: RouteDescriptor[] = [
   {
@@ -52,6 +52,15 @@ const routes: RouteDescriptor[] = [
   },
 ];
 
+const routeMeta: RouteMeta[] = routes.map((route) => ({
+  id: route.name,
+  name: route.name,
+  segments: route.segments,
+  verb: route.verb,
+  ...((route.params?.length ?? 0) > 0 ? { hasArgs: true } : {}),
+  ...(route.streams ? { streams: true } : {}),
+}));
+
 function makeFetch(responder: () => Response) {
   return vi.fn<typeof fetch>(async () => responder());
 }
@@ -68,9 +77,25 @@ type NestedApi = {
   orphan: { list: ApiLeaf };
 };
 
-describe("createClient", () => {
+function createTestClient<TApi extends object = Record<string, unknown>>(config: {
+  baseUrl?: string;
+  fetch?: typeof fetch;
+  headers?: Record<string, string>;
+}): TApi {
+  return createLazyClient<TApi>({
+    ...config,
+    routeMeta,
+    loadRoute: (id) => {
+      const route = routes.find((item) => item.name === id);
+      if (route === undefined) throw new Error(id);
+      return route;
+    },
+  });
+}
+
+describe("createLazyClient", () => {
   it("returns undefined for unknown method names", () => {
-    const api = createClient({ routes, fetch: makeFetch(() => new Response()) }) as Record<
+    const api = createTestClient({ fetch: makeFetch(() => new Response()) }) as Record<
       string,
       unknown
     >;
@@ -85,9 +110,8 @@ describe("createClient", () => {
           headers: { "content-type": "application/json" },
         }),
     );
-    const api = createClient<NestedApi>({
+    const api = createTestClient<NestedApi>({
       baseUrl: "http://api.test",
-      routes,
       fetch: fetchMock,
     });
 
@@ -100,6 +124,36 @@ describe("createClient", () => {
     expect(Object.keys(api)).not.toContain("getUser");
   });
 
+  it("loads route descriptors lazily on first call", async () => {
+    const fetchMock = makeFetch(
+      () =>
+        new Response(JSON.stringify({ id: 1 }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    );
+    const loadRoute = vi.fn(async (id: string) => {
+      const route = routes.find((item) => item.name === id);
+      if (route === undefined) throw new Error(id);
+      return route;
+    });
+    const api = createLazyClient<NestedApi>({
+      baseUrl: "http://api.test",
+      routeMeta,
+      loadRoute,
+      fetch: fetchMock,
+    });
+
+    expect(loadRoute).not.toHaveBeenCalled();
+    await api.users.byId({ userId: 42 });
+    await api.users.byId({ userId: 43 });
+
+    expect(loadRoute).toHaveBeenCalledTimes(1);
+    expect(loadRoute).toHaveBeenCalledWith("getUser");
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("http://api.test/users/42");
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("http://api.test/users/43");
+  });
+
   it("substitutes path params via alias", async () => {
     const fetchMock = makeFetch(
       () =>
@@ -108,9 +162,8 @@ describe("createClient", () => {
           headers: { "content-type": "application/json" },
         }),
     );
-    const api = createClient<NestedApi>({
+    const api = createTestClient<NestedApi>({
       baseUrl: "http://api.test",
-      routes,
       fetch: fetchMock,
     });
 
@@ -130,9 +183,8 @@ describe("createClient", () => {
           headers: { "content-type": "application/json" },
         }),
     );
-    const api = createClient<NestedApi>({
+    const api = createTestClient<NestedApi>({
       baseUrl: "http://api.test",
-      routes,
       fetch: fetchMock,
     });
 
@@ -153,9 +205,8 @@ describe("createClient", () => {
           headers: { "content-type": "application/json" },
         }),
     );
-    const api = createClient<NestedApi>({
+    const api = createTestClient<NestedApi>({
       baseUrl: "http://api.test",
-      routes,
       fetch: fetchMock,
     });
 
@@ -176,9 +227,8 @@ describe("createClient", () => {
           headers: { "content-type": "application/json" },
         }),
     );
-    const api = createClient<NestedApi>({
+    const api = createTestClient<NestedApi>({
       baseUrl: "http://api.test",
-      routes,
       fetch: fetchMock,
     });
 
@@ -196,7 +246,7 @@ describe("createClient", () => {
           headers: { "content-type": "application/json" },
         }),
     );
-    const api = createClient<NestedApi>({ routes, fetch: fetchMock });
+    const api = createTestClient<NestedApi>({ fetch: fetchMock });
     const got = await api.users.byId({ userId: 7 });
     expect(got).toEqual({ userId: 7, fullName: "Ada" });
   });
@@ -210,8 +260,7 @@ describe("createClient", () => {
           headers: { "content-type": "application/json" },
         }),
     );
-    const api = createClient<NestedApi>({
-      routes,
+    const api = createTestClient<NestedApi>({
       fetch: fetchMock,
     });
 
@@ -219,13 +268,65 @@ describe("createClient", () => {
     expect(got).toEqual({ ok: false, error: { kind: "PostNotFound", postId: 7 } });
   });
 
-  it("throws a structured error on non-2xx", async () => {
+  it("throws a DyadpyError on non-2xx", async () => {
     const fetchMock = makeFetch(() => new Response("boom", { status: 500 }));
-    const api = createClient<NestedApi>({
-      routes,
+    const api = createTestClient<NestedApi>({
       fetch: fetchMock,
     });
 
-    await expect(api.users.byId({ userId: 1 })).rejects.toMatchObject({ status: 500 });
+    await expect(api.users.byId({ userId: 1 })).rejects.toMatchObject({
+      name: "DyadpyError",
+      kind: "HttpError",
+      status: 500,
+      message: "HTTP 500",
+    });
+  });
+
+  it("unwraps typed-error envelopes from 4xx responses as DyadpyError", async () => {
+    const envelope = {
+      ok: false,
+      error: { kind: "PostNotFound", post_id: 7, message: "post 7 missing" },
+    };
+    const fetchMock = makeFetch(
+      () =>
+        new Response(JSON.stringify(envelope), {
+          status: 404,
+          headers: { "content-type": "application/json" },
+        }),
+    );
+    const api = createTestClient<NestedApi>({
+      fetch: fetchMock,
+    });
+
+    try {
+      await api.users.byId({ userId: 7 });
+      throw new Error("expected rejection");
+    } catch (error) {
+      // Real Error subclass — works with `instanceof Error`, has `message`,
+      // and exposes `kind` plus all extra fields (camelCased) for discrimination.
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).name).toBe("DyadpyError");
+      expect((error as Error).message).toBe("post 7 missing");
+      expect((error as { kind: string }).kind).toBe("PostNotFound");
+      expect((error as { postId: number }).postId).toBe(7);
+      expect((error as { status?: number }).status).toBe(404);
+    }
+  });
+
+  it("hands typed-error 4xx envelopes through as Result on `result: true` routes", async () => {
+    const envelope = { ok: false, error: { kind: "PostNotFound", post_id: 9 } };
+    const fetchMock = makeFetch(
+      () =>
+        new Response(JSON.stringify(envelope), {
+          status: 404,
+          headers: { "content-type": "application/json" },
+        }),
+    );
+    const api = createTestClient<NestedApi>({
+      fetch: fetchMock,
+    });
+
+    const got = await api.orphan.list();
+    expect(got).toEqual({ ok: false, error: { kind: "PostNotFound", postId: 9 } });
   });
 });

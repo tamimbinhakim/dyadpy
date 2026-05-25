@@ -131,6 +131,39 @@ async def test_typed_error_wraps_in_result(client_factory):
     assert body == {"ok": False, "error": {"kind": "PostNotFound", "post_id": 7}}
 
 
+async def test_typed_error_uses_declared_status_and_request_id(client_factory):
+    class PostNotFound(Exception):
+        status = 404
+        code = "post_not_found"
+
+        def __init__(self, post_id: int) -> None:
+            super().__init__(f"post {post_id} missing")
+            self.post_id = post_id
+
+    app = App()
+
+    @app.get("/posts/{post_id}")
+    @raises(PostNotFound)
+    async def get_post(post_id: int, ctx: Context) -> dict[str, int]:
+        ctx.request.state.request_id = "req-123"
+        raise PostNotFound(post_id)
+
+    async with client_factory(app) as client:
+        r = await client.get("/posts/7")
+    assert r.status_code == 404
+    body = r.json()
+    assert body == {
+        "ok": False,
+        "error": {
+            "kind": "PostNotFound",
+            "post_id": 7,
+            "status": 404,
+            "code": "post_not_found",
+            "request_id": "req-123",
+        },
+    }
+
+
 async def test_typed_success_wraps_in_result(client_factory):
     class Err(Exception):
         pass
@@ -180,6 +213,36 @@ async def test_streaming_endpoint_emits_sse(client_factory):
         {"kind": "token", "text": "world"},
         {"kind": "done", "count": 2},
     ]
+
+
+async def test_unhandled_stream_exception_emits_error_frame_and_logs_concisely(
+    client_factory,
+    caplog,
+):
+    class Token(msgspec.Struct, tag_field="kind", tag="token"):
+        text: str
+
+    app = App()
+
+    @app.get("/chat")
+    async def chat(ctx: Context) -> stream[Token]:
+        ctx.request.state.request_id = "req-stream"
+        yield Token(text="hello")
+        raise RuntimeError("stream died")
+
+    caplog.set_level("ERROR", logger="dyadpy.runtime")
+    async with client_factory(app) as client:
+        r = await client.get("/chat")
+
+    assert r.status_code == 200
+    assert (
+        'event: error\ndata: {"kind":"InternalError","message":"internal server error","request_id":"req-stream"}'
+        in r.text
+    )
+    logged = caplog.text
+    assert "RuntimeError: stream died" in logged
+    assert "request: GET /chat" in logged
+    assert "Traceback (most recent call last)" not in logged
 
 
 async def test_depends_resolution(client_factory):
@@ -241,13 +304,23 @@ async def test_missing_required_query_param_422(client_factory):
     assert r.status_code == 422
 
 
-async def test_unhandled_exception_500(client_factory):
+async def test_unhandled_exception_returns_500_and_logs_concisely(client_factory, caplog):
     app = App()
 
     @app.get("/boom")
-    async def boom() -> None:
+    async def boom(ctx: Context) -> None:
+        ctx.request.state.request_id = "req-500"
         raise RuntimeError("not declared")
 
+    caplog.set_level("ERROR", logger="dyadpy.runtime")
     async with client_factory(app) as client:
-        with pytest.raises(Exception):
-            await client.get("/boom")
+        r = await client.get("/boom")
+
+    assert r.status_code == 500
+    assert r.json() == {"detail": "internal server error", "request_id": "req-500"}
+    logged = caplog.text
+    assert "RuntimeError: not declared" in logged
+    assert "request: GET /boom" in logged
+    assert "request_id: req-500" in logged
+    assert "test_runtime.py" in logged
+    assert "Traceback (most recent call last)" not in logged

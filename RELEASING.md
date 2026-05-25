@@ -27,9 +27,10 @@ uv run ruff check .
 uv run ruff format --check .
 uv run mypy src
 uv run --with pyright pyright src
+cd ../..
+python scripts/check_versions.py
 
 # TypeScript
-cd ../..
 pnpm install --frozen-lockfile
 pnpm -r --filter='./packages/*' build
 pnpm -r --filter='./packages/*' test
@@ -42,7 +43,7 @@ pnpm exec prettier --check "**/*.{md,json,yaml,yml}"
 - [ ] Python: ruff lint, ruff format, mypy strict, pyright strict, pytest all green
 - [ ] TS: oxlint 0/0, oxfmt clean, prettier clean, tsc clean, vitest green
 - [ ] Build artifacts inspected (`uv build` wheel + sdist, `npm pack --dry-run` for each TS pkg)
-- [ ] Generated client.ts in `examples/*` regenerated if codegen changed
+- [ ] Generated client directories in `examples/*` regenerated if codegen changed
 - [ ] No `console.log` / `print(...)` debug statements in `packages/*/src`
 - [ ] No `# TODO` / `# FIXME` left in publishable code paths
 
@@ -90,6 +91,7 @@ Per package, confirm:
       for every package
 - [ ] `release-please-config.json` `extra-files` entries (e.g.
       `packages/dyadpy/src/dyadpy/__init__.py` `__version__`) match
+- [ ] `python scripts/check_versions.py` passes locally and in CI
 - [ ] Each package's `CHANGELOG.md` has a real release section (not
       just `[Unreleased]`)
 - [ ] `CHANGELOG.md` entries are user-facing (not commit-ese); breaking
@@ -173,21 +175,22 @@ app = App()
 async def ping() -> dict[str, str]:
     return {"ok": "yes"}
 EOF
-uv run dyadpy dev server.app:app --out client.ts &
+uv run dyadpy dev server.app:app --out client &
 sleep 2
 
 # Hit the live server
 curl -s http://127.0.0.1:8000/ping
-cat client.ts | head -20
+find client -maxdepth 2 -type f | sort
+cat client/index.ts | head -20
 
 # Cleanup
 kill %1
 ```
 
 - [ ] `uv add dyadpy` works
-- [ ] `dyadpy dev` starts, writes a non-empty `client.ts`, server responds 200
+- [ ] `dyadpy dev` starts, writes a non-empty `client/`, server responds 200
 - [ ] `pnpm add @dyadpy/ts` works in a fresh Node project
-- [ ] The generated `client.ts` imports from `@dyadpy/ts` without errors
+- [ ] The generated client imports from `@dyadpy/ts` without errors
 
 ## 10. Pull the trigger
 
@@ -213,6 +216,22 @@ If anything goes sideways mid-publish:
 - **Wrong tag pushed:** delete locally and on origin
   (`git push --delete origin <tag>`), re-tag, re-push. Only safe
   _before_ the publish workflow finishes.
+
+## Ad-hoc package publish
+
+Use this only when you intentionally bypass the release-please PR loop:
+
+```bash
+python scripts/check_versions.py --package packages/dyadpy --check-tag-available
+gh workflow run release.yml -f path=dyadpy
+
+python scripts/check_versions.py --package packages/dyadpy-ts --check-tag-available
+gh workflow run release.yml -f path=dyadpy-ts
+```
+
+The workflow repeats the guard before publishing, detects PyPI vs npm from the
+package metadata, builds, publishes, creates the `<component>-vX.Y.Z` tag, and
+creates the GitHub release.
 
 ## 11. Post-release
 

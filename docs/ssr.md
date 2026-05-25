@@ -2,7 +2,7 @@
 
 Dyadpy's runtime (`@dyadpy/ts`) and every framework adapter
 (`@dyadpy/react`, `@dyadpy/svelte`, `@dyadpy/solid`) is SSR-safe by
-construction — the generated `client.ts` uses `globalThis.fetch`, never
+construction — the generated client uses `globalThis.fetch`, never
 touches `window`/`document`/`localStorage`, and accepts a custom
 `fetch` / `headers` / `baseUrl` for environments that need it.
 
@@ -34,7 +34,7 @@ import { prefetchQueries, prefetchQuery } from "@dyadpy/react/server";
 import { forwardHeaders } from "@dyadpy/ts";
 import { headers } from "next/headers";
 
-import { createApi, _routes } from "@/lib/dyadpy/client";
+import { createApi, routeMeta } from "@/lib/dyadpy/client";
 import { UserCard } from "./UserCard"; // client component using `dyad.users.byId.useQuery`
 
 export default async function Page({
@@ -49,7 +49,7 @@ export default async function Page({
     baseUrl: process.env.DYADPY_API_URL,
     headers: forwardHeaders(await headers()),
   });
-  const dyad = createReactClient(api, _routes);
+  const dyad = createReactClient(api, routeMeta);
 
   await prefetchQuery(qc, dyad.users.byId, { userId: Number(id) });
 
@@ -153,10 +153,10 @@ directly, configure the generated client with that proxy path:
 
 ```ts
 import { createReactClient } from "@dyadpy/react";
-import { createApi, _routes } from "@/lib/dyadpy/client";
+import { createApi, routeMeta } from "@/lib/dyadpy/client";
 
 const api = createApi({ baseUrl: "/api/dyadpy" });
-export const dyad = createReactClient(api, _routes);
+export const dyad = createReactClient(api, routeMeta);
 ```
 
 For SSR, use the absolute internal URL instead:
