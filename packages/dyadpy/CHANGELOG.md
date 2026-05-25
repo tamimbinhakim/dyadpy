@@ -7,6 +7,14 @@ from [Conventional Commits](https://www.conventionalcommits.org/).
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.11](https://github.com/tamimbinhakim/dyadpy/compare/dyadpy-v0.1.10...dyadpy-v0.1.11) (2026-05-25)
+
+### Features
+
+- add an `App(exception_handler=...)` hook so framework integrations can
+  render undeclared exceptions while keeping Dyadpy's compact traceback
+  fallback for raw apps.
+
 ## [0.1.10](https://github.com/tamimbinhakim/dyadpy/compare/dyadpy-v0.1.9...dyadpy-v0.1.10) (2026-05-25)
 
 ### ⚠ BREAKING CHANGES

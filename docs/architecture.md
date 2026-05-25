@@ -84,7 +84,9 @@ a numeric `status` attribute use that HTTP status; otherwise the compatibility
 default is 200. `request.state.request_id`, when present, is copied onto the
 error payload. Anything undeclared is not converted into `Result`; it logs a
 compact server-side traceback and returns a scrubbed 500 payload with the same
-request id when available.
+request id when available. Frameworks embedding Dyadpy can pass
+`App(exception_handler=...)` to render their own public error response while
+leaving raw Dyadpy apps on the scrubbed compact default.
 
 ### 4. Codegen (`dyadpy/codegen.py`)
 

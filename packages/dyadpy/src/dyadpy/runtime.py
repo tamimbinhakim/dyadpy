@@ -40,6 +40,7 @@ _PATH_PARAM_RE = re.compile(r"\{([^}:]+)(?::[^}]+)?\}")
 _log = logging.getLogger("dyadpy.runtime")
 
 TeardownFn = Callable[[], Awaitable[None]]
+ExceptionHandler = Callable[[Request, Exception], Response | Awaitable[Response]]
 
 
 @dataclass(slots=True)
@@ -643,6 +644,7 @@ def _request_id_from_request(request: Request) -> str | None:
 class RouteRunner:
     handler: Callable[..., Any]
     plan: HandlerPlan
+    exception_handler: ExceptionHandler | None = None
 
     async def handle(self, request: Request) -> Response:
         teardown: list[TeardownFn] = []
@@ -688,16 +690,34 @@ class RouteRunner:
                 await _run_teardown(teardown)
                 return _build_error_response(exc, ctx_for_response)
             await _run_teardown(teardown)
-            log_exception(
-                _log,
-                exc,
-                request=request,
-                request_id=_request_id(ctx_for_response) or _request_id_from_request(request),
-            )
-            return _build_internal_error_response(ctx_for_response, request)
+            return await self._handle_unhandled(exc, ctx_for_response, request)
         finally:
             if ctx_token is not None:
                 current_context_var.reset(ctx_token)
+
+    async def _handle_unhandled(
+        self,
+        exc: Exception,
+        ctx: Context | None,
+        request: Request,
+    ) -> Response:
+        request_id = _request_id(ctx) or _request_id_from_request(request)
+        if self.exception_handler is not None:
+            try:
+                rendered = self.exception_handler(request, exc)
+                if inspect.isawaitable(rendered):
+                    rendered = await rendered
+                return rendered
+            except Exception as handler_exc:
+                log_exception(
+                    _log,
+                    handler_exc,
+                    request=request,
+                    request_id=request_id,
+                    message="exception handler failed",
+                )
+        log_exception(_log, exc, request=request, request_id=request_id)
+        return _build_internal_error_response(ctx, request)
 
     async def _gather_kwargs(
         self,

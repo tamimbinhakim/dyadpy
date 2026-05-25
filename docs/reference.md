@@ -269,6 +269,12 @@ exception chains. The client gets the short structured payload; internal,
 undeclared exceptions are logged server-side with a compact traceback and return
 a scrubbed 500 payload with the request id when available.
 
+Framework integrations can customize the public response for undeclared
+exceptions by constructing the app with `App(exception_handler=...)`. The
+handler receives `(request, exc)` and returns a Starlette `Response`; if it
+raises, Dyadpy logs that handler failure compactly and falls back to the
+scrubbed 500 response.
+
 ### Exceptions inside generic types
 
 An Exception subclass nested inside a user-defined generic Struct (e.g. a

@@ -24,7 +24,7 @@ from starlette.responses import Response
 from starlette.routing import Route as StarletteRoute
 from starlette.routing import WebSocketRoute as StarletteWebSocketRoute
 
-from dyadpy.runtime import HandlerPlan, RouteRunner, build_plan
+from dyadpy.runtime import ExceptionHandler, HandlerPlan, RouteRunner, build_plan
 
 # ``dyadpy.bidi`` is imported lazily inside the ``websocket`` decorator and the
 # build path — it drags ``starlette.websockets`` which costs ~5 ms at import
@@ -75,6 +75,7 @@ def _new_ws_routes() -> list[WebSocketRoute]:
 class App:
     routes: list[Route] = field(default_factory=_new_routes)
     websocket_routes: list[WebSocketRoute] = field(default_factory=_new_ws_routes)
+    exception_handler: ExceptionHandler | None = None
     _starlette: Starlette | None = None
 
     def _register(self, method: HttpMethod, path: str) -> Callable[[Handler], Handler]:
@@ -140,7 +141,11 @@ class App:
         for r in self.routes:
             if r.plan is None:
                 r.plan = build_plan(r.handler, r.path)
-            runner = RouteRunner(handler=r.handler, plan=r.plan)
+            runner = RouteRunner(
+                handler=r.handler,
+                plan=r.plan,
+                exception_handler=self.exception_handler,
+            )
             starlette_routes.append(
                 StarletteRoute(
                     path=r.path,

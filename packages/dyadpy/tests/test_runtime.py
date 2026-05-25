@@ -17,6 +17,7 @@ from typing import Annotated
 import httpx
 import msgspec
 import pytest
+from starlette.responses import JSONResponse
 
 from dyadpy import App, Context, Depends, raises, stream
 from dyadpy.params import Body, Header
@@ -324,3 +325,34 @@ async def test_unhandled_exception_returns_500_and_logs_concisely(client_factory
     assert "request_id: req-500" in logged
     assert "test_runtime.py" in logged
     assert "Traceback (most recent call last)" not in logged
+
+
+async def test_unhandled_exception_can_use_custom_exception_handler(client_factory, caplog):
+    async def render_problem(request, exc):
+        request_id = getattr(request.state, "request_id", None)
+        body = {
+            "title": type(exc).__name__,
+            "detail": str(exc),
+            "request_id": request_id,
+        }
+        return JSONResponse(body, status_code=418, media_type="application/problem+json")
+
+    app = App(exception_handler=render_problem)
+
+    @app.get("/boom")
+    async def boom(ctx: Context) -> None:
+        ctx.request.state.request_id = "req-custom"
+        raise RuntimeError("custom render")
+
+    caplog.set_level("ERROR", logger="dyadpy.runtime")
+    async with client_factory(app) as client:
+        r = await client.get("/boom")
+
+    assert r.status_code == 418
+    assert r.headers["content-type"].startswith("application/problem+json")
+    assert r.json() == {
+        "title": "RuntimeError",
+        "detail": "custom render",
+        "request_id": "req-custom",
+    }
+    assert "RuntimeError: custom render" not in caplog.text
