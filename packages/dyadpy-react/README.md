@@ -5,8 +5,7 @@
 > [TanStack Query](https://tanstack.com/query/latest).
 
 ```bash
-pnpm add @dyadpy/react@alpha @dyadpy/ts@alpha @tanstack/react-query
-# alpha channel — drop `@alpha` once v0.1.0 ships
+pnpm add @dyadpy/react @dyadpy/ts @tanstack/react-query
 ```
 
 `@dyadpy/react` adds hook leaves on top of your generated client:

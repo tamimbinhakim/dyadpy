@@ -3,7 +3,7 @@
 > The tiny TypeScript runtime imported by Dyadpy-generated clients.
 
 ```bash
-pnpm add @dyadpy/ts@alpha   # alpha channel — drop `@alpha` once v0.1.0 ships
+pnpm add @dyadpy/ts
 ```
 
 You shouldn't have to think about this package much. The

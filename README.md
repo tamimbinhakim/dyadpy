@@ -127,19 +127,18 @@ Full primitives in [`docs/reference.md`](./docs/reference.md).
 
 ## Install
 
-> Dyadpy is in **alpha** (`0.1.0a0` / `0.1.0-alpha.0`). The version pin
-> and `@alpha` tag below opt you into the prerelease channel. Once
-> v0.1.0 ships, drop both.
+> Dyadpy is pre-1.0. Pin exact versions in production apps when you need
+> repeatable installs.
 
 ```bash
 # Server
 uv add 'dyadpy==0.1.0a0'
 
 # Client runtime (any frontend)
-pnpm add @dyadpy/ts@alpha
+pnpm add @dyadpy/ts
 
 # Framework hooks (optional)
-pnpm add @dyadpy/react@alpha   # or @dyadpy/svelte@alpha / @dyadpy/solid@alpha
+pnpm add @dyadpy/react   # or @dyadpy/svelte / @dyadpy/solid
 ```
 
 ## Run

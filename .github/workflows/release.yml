@@ -137,7 +137,14 @@ jobs:
           echo "component=$COMPONENT" >> "$GITHUB_OUTPUT"
 
       - name: Check version and tag
-        run: python scripts/check_versions.py --package packages/${{ inputs.path }} --check-tag-available
+        run: |
+          set -euo pipefail
+          if [ "${{ steps.meta.outputs.kind }}" = "npm" ] &&
+            npm view "${{ steps.meta.outputs.name }}@${{ steps.meta.outputs.version }}" version >/dev/null 2>&1; then
+            python scripts/check_versions.py --package packages/${{ inputs.path }}
+          else
+            python scripts/check_versions.py --package packages/${{ inputs.path }} --check-tag-available
+          fi
 
       - name: Build Python package
         if: steps.meta.outputs.kind == 'python'
@@ -160,7 +167,19 @@ jobs:
       - name: Publish npm package
         if: steps.meta.outputs.kind == 'npm'
         working-directory: packages/${{ inputs.path }}
-        run: npm publish --provenance --access public
+        run: |
+          set -euo pipefail
+          NAME="${{ steps.meta.outputs.name }}"
+          VERSION="${{ steps.meta.outputs.version }}"
+          if npm view "$NAME@$VERSION" version >/dev/null 2>&1; then
+            echo "$NAME@$VERSION already published; updating dist-tags only."
+          else
+            npm publish --provenance --access public
+          fi
+          npm dist-tag add "$NAME@$VERSION" latest
+          if [[ "$VERSION" == *-* ]]; then
+            npm dist-tag add "$NAME@$VERSION" alpha
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
@@ -172,12 +191,20 @@ jobs:
           NAME="${{ steps.meta.outputs.name }}"
           VERSION="${{ steps.meta.outputs.version }}"
           TAG="${{ steps.meta.outputs.component }}-v${VERSION}"
-          git tag "$TAG"
-          git push origin "$TAG"
-          gh release create "$TAG" \
-            --title "$TAG" \
-            --notes "Release of \`$NAME\` $VERSION. See packages/${{ inputs.path }}/CHANGELOG.md." \
-            --target main
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists."
+          else
+            git tag "$TAG"
+            git push origin "$TAG"
+          fi
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists."
+          else
+            gh release create "$TAG" \
+              --title "$TAG" \
+              --notes "Release of \`$NAME\` $VERSION. See packages/${{ inputs.path }}/CHANGELOG.md." \
+              --target main
+          fi
 
   publish-npm-ts:
     name: Publish @dyadpy/ts to npm
