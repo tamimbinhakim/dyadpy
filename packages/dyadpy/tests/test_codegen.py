@@ -205,6 +205,42 @@ def test_render_emits_configurable_api_factory_for_ssr() -> None:
     assert 'verb: "byId"' in out
 
 
+def test_load_route_emits_one_import_per_chunk_not_per_route() -> None:
+    # Bundlers (Turbopack especially) track every `import(...)` call site as a
+    # separate code-split computation in their persistent cache. The loader
+    # must dedupe to one import per chunk file or the cache explodes on apps
+    # with hundreds of routes — see https://github.com/tamimbinhakim/dyadpy.
+    app = App()
+
+    @app.get("/users")
+    async def list_users() -> list[int]:
+        return []
+
+    @app.get("/users/{user_id}")
+    async def get_user(user_id: int) -> dict[str, int]:
+        return {"id": user_id}
+
+    @app.post("/users")
+    async def create_user(name: str) -> dict[str, str]:
+        return {"name": name}
+
+    @app.get("/posts")
+    async def list_posts() -> list[int]:
+        return []
+
+    files = render(build_ir(app))
+    loader = files["routes/index.ts"]
+    # Three user routes collapse to one `import("./users")`, posts to one
+    # `import("./posts")`. The route table is plain strings, not imports.
+    assert loader.count('import("./users")') == 1
+    assert loader.count('import("./posts")') == 1
+    assert "chunkLoaders" in loader
+    assert "routeChunks" in loader
+    # No fall-through switch case — the route table maps id → chunk directly.
+    assert "switch (id)" not in loader
+    assert 'case "listUsers"' not in loader
+
+
 def test_descriptor_includes_param_locations() -> None:
     app = App()
 

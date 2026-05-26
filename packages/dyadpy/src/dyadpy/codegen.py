@@ -157,21 +157,42 @@ def _render_route_files(state: _RenderState) -> dict[str, str]:
         routes_by_chunk.setdefault(chunk_names[i], []).append(i)
 
     files: dict[str, str] = {}
+
+    # Emit one `import(...)` per chunk file rather than per route. With a route
+    # per switch case, bundlers (Turbopack especially) track every call site as
+    # a separate code-split computation in their persistent cache — a 1000-route
+    # app produces ~1000 cache entries even though only ~dozens of unique chunks
+    # exist. The route→chunk lookup table is a plain string map and stays cheap.
+    unique_chunks = sorted(routes_by_chunk.keys())
     index_lines = [
         HEADER_BANNER,
         'import type { RouteDescriptor } from "@dyadpy/ts";\n\n',
-        "export async function loadRoute(id: string): Promise<RouteDescriptor> {\n",
-        "  switch (id) {\n",
+        "const chunkLoaders: Record<string, () => Promise<Record<string, RouteDescriptor>>> = {\n",
     ]
+    for chunk in unique_chunks:
+        index_lines.append(
+            f"  {json.dumps(chunk)}: () => import({json.dumps('./' + chunk)}),\n",
+        )
+    index_lines.append("};\n\n")
+
+    index_lines.append("const routeChunks: Record<string, string> = {\n")
     for i in range(len(state.ir.routes)):
         route_name = state.route_names[i]
         chunk_name = chunk_names[i]
         index_lines.append(
-            f"    case {json.dumps(route_name)}:\n"
-            f"      return (await import({json.dumps('./' + chunk_name)})).{route_name};\n",
+            f"  {json.dumps(route_name)}: {json.dumps(chunk_name)},\n",
         )
+    index_lines.append("};\n\n")
+
     index_lines.append(
-        "    default:\n      throw new Error(`Unknown Dyadpy route: ${id}`);\n  }\n}\n",
+        "export async function loadRoute(id: string): Promise<RouteDescriptor> {\n"
+        "  const chunk = routeChunks[id];\n"
+        "  if (chunk === undefined) throw new Error(`Unknown Dyadpy route: ${id}`);\n"
+        "  const mod = await chunkLoaders[chunk]!();\n"
+        "  const route = mod[id];\n"
+        "  if (route === undefined) throw new Error(`Unknown Dyadpy route: ${id}`);\n"
+        "  return route;\n"
+        "}\n",
     )
     files["routes/index.ts"] = "".join(index_lines)
 
