@@ -205,6 +205,42 @@ def test_render_emits_configurable_api_factory_for_ssr() -> None:
     assert 'verb: "byId"' in out
 
 
+def test_load_route_emits_one_import_per_chunk_not_per_route() -> None:
+    # Bundlers (Turbopack especially) track every `import(...)` call site as a
+    # separate code-split computation in their persistent cache. The loader
+    # must dedupe to one import per chunk file or the cache explodes on apps
+    # with hundreds of routes — see https://github.com/tamimbinhakim/dyadpy.
+    app = App()
+
+    @app.get("/users")
+    async def list_users() -> list[int]:
+        return []
+
+    @app.get("/users/{user_id}")
+    async def get_user(user_id: int) -> dict[str, int]:
+        return {"id": user_id}
+
+    @app.post("/users")
+    async def create_user(name: str) -> dict[str, str]:
+        return {"name": name}
+
+    @app.get("/posts")
+    async def list_posts() -> list[int]:
+        return []
+
+    files = render(build_ir(app))
+    loader = files["routes/index.ts"]
+    # Three user routes collapse to one `import("./users")`, posts to one
+    # `import("./posts")`. The route table is plain strings, not imports.
+    assert loader.count('import("./users")') == 1
+    assert loader.count('import("./posts")') == 1
+    assert "chunkLoaders" in loader
+    assert "routeChunks" in loader
+    # No fall-through switch case — the route table maps id → chunk directly.
+    assert "switch (id)" not in loader
+    assert 'case "listUsers"' not in loader
+
+
 def test_descriptor_includes_param_locations() -> None:
     app = App()
 
@@ -429,6 +465,169 @@ def test_unconstrained_object_type_is_not_never_record() -> None:
     assert "export type JsonValue = JsonPrimitive | JsonObject | JsonValue[];" in out
     assert "metadata: JsonObject" in out
     assert "Record<string, never>" not in out
+
+
+def test_opaque_dict_fields_emit_route_descriptor_paths() -> None:
+    """`dict[str, Any]` fields surface as opaqueRequestPaths / opaqueResponsePaths.
+
+    The TS runtime uses these paths to skip snake_case<->camelCase rename
+    inside user-defined JSON payloads, so opaque content round-trips with
+    its original keys intact.
+    """
+
+    class Version(msgspec.Struct):
+        id: str
+        definition: dict[str, Any]
+
+    class VersionBody(msgspec.Struct):
+        definition: dict[str, Any]
+        change_note: str | None = None
+
+    app = App()
+
+    @app.post("/versions")
+    async def create_version(body: VersionBody) -> Version:
+        return Version(id="1", definition=body.definition)
+
+    out = _render_text(app)
+    assert (
+        '"opaqueRequestPaths": ["definition"]' in out or 'opaqueRequestPaths: ["definition"]' in out
+    )
+    assert (
+        '"opaqueResponsePaths": ["definition"]' in out
+        or 'opaqueResponsePaths: ["definition"]' in out
+    )
+
+
+def test_opaque_paths_prefixed_with_data_for_result_routes() -> None:
+    """When the route declares `@raises`, the response is wrapped in
+    `Result<T, E>` (`{ok: true, data: T}`) — opaque paths must be prefixed
+    with `data.` so they apply to the success-envelope payload at runtime.
+    """
+
+    class NotFound(Exception):
+        pass
+
+    class Version(msgspec.Struct):
+        id: str
+        definition: dict[str, Any]
+
+    app = App()
+
+    @app.get("/versions/{id}")
+    @raises(NotFound)
+    async def show_version(id: str) -> Version:
+        return Version(id=id, definition={})
+
+    out = _render_text(app)
+    assert 'opaqueResponsePaths: ["data.definition"]' in out
+
+
+def test_opaque_paths_skip_routes_with_no_response_body() -> None:
+    """Routes returning `None` skip opaque-path collection on the response side."""
+
+    app = App()
+
+    @app.post("/jobs/{id}/cancel")
+    async def cancel_job(id: str) -> None:
+        return None
+
+    out = _render_text(app)
+    assert "opaqueResponsePaths" not in out
+    assert "opaqueRequestPaths" not in out
+
+
+def test_opaque_paths_skip_routes_with_no_body_params() -> None:
+    """Routes whose only inputs are path/query/header params skip request-side collection."""
+
+    app = App()
+
+    @app.get("/items/{id}")
+    async def show_item(id: str, q: str = "") -> dict[str, str]:
+        return {"id": id, "q": q}
+
+    out = _render_text(app)
+    assert "opaqueRequestPaths" not in out
+
+
+def test_opaque_paths_handle_optional_union_fields() -> None:
+    """`X | None` becomes a `oneOf`/`anyOf` (or `type: [...]`) branch — the walker
+    must descend each branch without crashing on the non-object branches.
+    """
+
+    class Outer(msgspec.Struct):
+        title: str | None = None
+        config: dict[str, Any] = {}
+
+    app = App()
+
+    @app.get("/items")
+    async def list_items() -> Outer:
+        return Outer()
+
+    out = _render_text(app)
+    assert 'opaqueResponsePaths: ["config"]' in out
+
+
+def test_opaque_walk_terminates_on_recursive_components() -> None:
+    """A self-referencing component must not loop the cycle guard forever.
+
+    Exercises `_walk_for_opaque` directly because msgspec can't resolve a
+    forward-ref inside a function-scoped struct (this is purely about the
+    walker's cycle handling, not about codegen).
+    """
+    from dyadpy.codegen import _walk_for_opaque
+
+    components: dict[str, dict[str, Any]] = {
+        "Node": {
+            "type": "object",
+            "properties": {
+                "id": {"type": "string"},
+                "child": {"$ref": "#/components/schemas/Node"},
+                "meta": {"type": "object"},
+            },
+        }
+    }
+    out: list[str] = []
+    _walk_for_opaque(
+        {"$ref": "#/components/schemas/Node"},
+        components,
+        prefix="root",
+        out=out,
+        seen=set(),
+    )
+    # Walker terminates and records the opaque `meta` field exactly once.
+    assert out == ["root.meta"]
+
+
+def test_opaque_walk_ignores_missing_refs_and_non_dict_schemas() -> None:
+    """Dangling `$ref` and non-dict schema inputs must short-circuit cleanly."""
+    from dyadpy.codegen import _walk_for_opaque
+
+    out: list[str] = []
+    _walk_for_opaque({"$ref": "#/components/schemas/Missing"}, {}, prefix="x", out=out, seen=set())
+    _walk_for_opaque(None, {}, prefix="x", out=out, seen=set())  # type: ignore[arg-type]
+    _walk_for_opaque("not-a-dict", {}, prefix="x", out=out, seen=set())  # type: ignore[arg-type]
+    assert out == []
+
+
+def test_opaque_paths_descend_into_arrays() -> None:
+    """Opaque-path collection should walk through array `items` so that
+    `list[dict[str, Any]]` surfaces the opaque element type. Arrays inherit
+    the parent path — opaque paths are property-relative, not index-relative.
+    """
+
+    class Outer(msgspec.Struct):
+        rows: list[dict[str, Any]]
+
+    app = App()
+
+    @app.get("/outer")
+    async def get_outer() -> Outer:
+        return Outer(rows=[])
+
+    out = _render_text(app)
+    assert 'opaqueResponsePaths: ["rows"]' in out
 
 
 def test_struct_docstring_not_emitted_as_jsdoc() -> None:

@@ -28,6 +28,21 @@ export interface RouteDescriptor {
   binaryResponse?: boolean;
   /** Body is application/x-www-form-urlencoded (or multipart/form-data when files present). */
   formBody?: boolean;
+  /**
+   * Dotted property paths within the request body whose value is an opaque
+   * JSON object (typed `dict[str, Any]` / `JsonObject` server-side). The
+   * runtime skips `camelToSnakeDeep` recursion into those subtrees so
+   * user-defined JSON payloads round-trip unchanged. Paths use camelCase
+   * property names and are relative to the request-body JSON.
+   */
+  opaqueRequestPaths?: ReadonlyArray<string>;
+  /**
+   * Dotted property paths within the response payload whose value is an
+   * opaque JSON object. The runtime skips `snakeToCamelDeep` recursion into
+   * those subtrees. For routes returning `Result<T, E>` the paths are
+   * pre-prefixed with `data.` so they apply to the success envelope.
+   */
+  opaqueResponsePaths?: ReadonlyArray<string>;
 }
 
 export interface RouteMeta {

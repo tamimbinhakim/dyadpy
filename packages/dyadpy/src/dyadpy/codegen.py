@@ -157,21 +157,42 @@ def _render_route_files(state: _RenderState) -> dict[str, str]:
         routes_by_chunk.setdefault(chunk_names[i], []).append(i)
 
     files: dict[str, str] = {}
+
+    # Emit one `import(...)` per chunk file rather than per route. With a route
+    # per switch case, bundlers (Turbopack especially) track every call site as
+    # a separate code-split computation in their persistent cache — a 1000-route
+    # app produces ~1000 cache entries even though only ~dozens of unique chunks
+    # exist. The route→chunk lookup table is a plain string map and stays cheap.
+    unique_chunks = sorted(routes_by_chunk.keys())
     index_lines = [
         HEADER_BANNER,
         'import type { RouteDescriptor } from "@dyadpy/ts";\n\n',
-        "export async function loadRoute(id: string): Promise<RouteDescriptor> {\n",
-        "  switch (id) {\n",
+        "const chunkLoaders: Record<string, () => Promise<Record<string, RouteDescriptor>>> = {\n",
     ]
+    for chunk in unique_chunks:
+        index_lines.append(
+            f"  {json.dumps(chunk)}: () => import({json.dumps('./' + chunk)}),\n",
+        )
+    index_lines.append("};\n\n")
+
+    index_lines.append("const routeChunks: Record<string, string> = {\n")
     for i in range(len(state.ir.routes)):
         route_name = state.route_names[i]
         chunk_name = chunk_names[i]
         index_lines.append(
-            f"    case {json.dumps(route_name)}:\n"
-            f"      return (await import({json.dumps('./' + chunk_name)})).{route_name};\n",
+            f"  {json.dumps(route_name)}: {json.dumps(chunk_name)},\n",
         )
+    index_lines.append("};\n\n")
+
     index_lines.append(
-        "    default:\n      throw new Error(`Unknown Dyadpy route: ${id}`);\n  }\n}\n",
+        "export async function loadRoute(id: string): Promise<RouteDescriptor> {\n"
+        "  const chunk = routeChunks[id];\n"
+        "  if (chunk === undefined) throw new Error(`Unknown Dyadpy route: ${id}`);\n"
+        "  const mod = await chunkLoaders[chunk]!();\n"
+        "  const route = mod[id];\n"
+        "  if (route === undefined) throw new Error(`Unknown Dyadpy route: ${id}`);\n"
+        "  return route;\n"
+        "}\n",
     )
     files["routes/index.ts"] = "".join(index_lines)
 
@@ -187,7 +208,7 @@ def _render_route_files(state: _RenderState) -> dict[str, str]:
             lines.append("\n")
             lines.append(
                 f"export const {route_name}: RouteDescriptor = "
-                f"{_render_route_descriptor(route, route_name, entry, indent='')};\n",
+                f"{_render_route_descriptor(route, route_name, entry, indent='', components=state.ir.components)};\n",
             )
         files[f"routes/{chunk_name}.ts"] = "".join(lines)
     return files
@@ -921,6 +942,7 @@ def _render_route_descriptor(
     namespace: _NamespaceEntry,
     *,
     indent: str,
+    components: dict[str, dict[str, Any]],
 ) -> str:
     parts = [
         f"method: {json.dumps(route.method)}",
@@ -942,6 +964,13 @@ def _render_route_descriptor(
     if route.form_body:
         parts.append("formBody: true")
 
+    request_opaque = _collect_request_opaque_paths(route, components)
+    if request_opaque:
+        parts.append(f"opaqueRequestPaths: {json.dumps(request_opaque)}")
+    response_opaque = _collect_response_opaque_paths(route, components)
+    if response_opaque:
+        parts.append(f"opaqueResponsePaths: {json.dumps(response_opaque)}")
+
     inline = indent + "{ " + ", ".join(parts) + " }"
     if "\n" not in inline and len(inline) <= _INLINE_LINE_BUDGET:
         return inline
@@ -952,6 +981,132 @@ def _render_route_descriptor(
         lines.append(f"{inner}{p},")
     lines.append(indent + "}")
     return "\n".join(lines)
+
+
+# ---- Opaque path collection ------------------------------------------------
+# JSON Schema walker that locates property paths whose declared type is an
+# unconstrained object (``dict[str, Any]`` / ``JsonObject``). The TS runtime
+# uses these paths to skip the snake_case <-> camelCase rename inside those
+# subtrees so user-defined JSON payloads (e.g. ``RuleVersion.definition``)
+# round-trip unchanged. Paths use camelCase property names — they're applied
+# AFTER property renaming.
+
+
+def _collect_response_opaque_paths(
+    route: RouteIR,
+    components: dict[str, dict[str, Any]],
+) -> list[str]:
+    """Opaque paths for the response payload (relative to the wire JSON).
+
+    For routes that return ``Result<T, E>`` (``raises`` is non-empty), paths
+    are prefixed with ``data.`` because the success envelope wraps ``T`` under
+    ``data``.
+    """
+    if route.streams or route.binary_response:
+        return []
+    schema = route.response
+    if schema is None:
+        return []
+    paths: list[str] = []
+    _walk_for_opaque(schema, components, prefix="", out=paths, seen=set())
+    if not paths:
+        return []
+    if route.raises:
+        # Result success envelope wraps the typed payload under ``data``.
+        return [f"data.{p}" if p else "data" for p in paths]
+    return paths
+
+
+def _collect_request_opaque_paths(
+    route: RouteIR,
+    components: dict[str, dict[str, Any]],
+) -> list[str]:
+    """Opaque paths for the request body (relative to the wire JSON).
+
+    Embedded body params are nested under their alias on the wire; non-embed
+    single-body params occupy the payload root.
+    """
+    if route.binary_body or route.form_body:
+        return []
+    body_params = [p for p in route.params if p.location == "body"]
+    if not body_params:
+        return []
+    out: list[str] = []
+    for param in body_params:
+        prefix = param.alias if param.embed else ""
+        _walk_for_opaque(param.schema, components, prefix=prefix, out=out, seen=set())
+    return out
+
+
+def _walk_for_opaque(
+    schema: Any,
+    components: dict[str, dict[str, Any]],
+    *,
+    prefix: str,
+    out: list[str],
+    seen: set[str],
+) -> None:
+    if not isinstance(schema, dict):
+        return
+    s = cast("dict[str, Any]", schema)
+
+    if "$ref" in s:
+        name = str(s["$ref"]).rsplit("/", 1)[-1]
+        # Per-branch cycle guard — the same component can appear under
+        # different prefixes, so we track refs by name within the current walk.
+        if name in seen:
+            return
+        target = components.get(name)
+        if target is None:
+            return
+        _walk_for_opaque(target, components, prefix=prefix, out=out, seen={*seen, name})
+        return
+
+    for combinator in ("oneOf", "anyOf", "allOf"):
+        branches = s.get(combinator)
+        if isinstance(branches, list):
+            for branch in branches:
+                _walk_for_opaque(branch, components, prefix=prefix, out=out, seen=seen)
+            return
+
+    t: Any = s.get("type")
+    if isinstance(t, list):
+        rest = {k: v for k, v in s.items() if k != "type"}
+        for branch_t in t:
+            _walk_for_opaque(
+                {**rest, "type": branch_t},
+                components,
+                prefix=prefix,
+                out=out,
+                seen=seen,
+            )
+        return
+
+    if t == "array":
+        items = s.get("items")
+        if items:
+            # Array elements share the parent path — opaque paths are property-
+            # relative, not index-relative.
+            _walk_for_opaque(items, components, prefix=prefix, out=out, seen=seen)
+        return
+
+    if t == "object" or "properties" in s or "additionalProperties" in s:
+        props = cast("dict[str, Any]", s.get("properties") or {})
+        additional = s.get("additionalProperties")
+        if not props:
+            # No declared properties — this matches ``JsonObject`` (additionalProperties
+            # absent, True, or {}) and ``dict[str, Any]``. ``additionalProperties: False``
+            # represents an empty closed object and is not opaque.
+            if additional is not False and prefix:
+                out.append(prefix)
+            return
+        for raw_name, child in props.items():
+            camel_name = _to_camel(str(raw_name))
+            child_prefix = f"{prefix}.{camel_name}" if prefix else camel_name
+            _walk_for_opaque(child, components, prefix=child_prefix, out=out, seen=seen)
+        if isinstance(additional, dict):
+            _walk_for_opaque(additional, components, prefix=prefix, out=out, seen=seen)
+        return
 
 
 def _render_param_descriptor_list(params: list[ParamIR], *, indent: str) -> str:
