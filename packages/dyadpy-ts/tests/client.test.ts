@@ -50,6 +50,26 @@ const routes: RouteDescriptor[] = [
     verb: "list",
     result: true,
   },
+  {
+    method: "POST",
+    path: "/versions",
+    name: "createVersion",
+    segments: ["versions"],
+    verb: "create",
+    params: [{ name: "body", alias: "body", in: "body" }],
+    opaqueRequestPaths: ["definition"],
+    opaqueResponsePaths: ["definition"],
+  },
+  {
+    method: "GET",
+    path: "/versions/{id}",
+    name: "showVersion",
+    segments: ["versions"],
+    verb: "byId",
+    params: [{ name: "id", alias: "id", in: "path" }],
+    result: true,
+    opaqueResponsePaths: ["data.definition"],
+  },
 ];
 
 const routeMeta: RouteMeta[] = routes.map((route) => ({
@@ -75,6 +95,7 @@ type NestedApi = {
   search: { list: ApiLeaf };
   login: { create: ApiLeaf };
   orphan: { list: ApiLeaf };
+  versions: { create: ApiLeaf; byId: ApiLeaf };
 };
 
 function createTestClient<TApi extends object = Record<string, unknown>>(config: {
@@ -249,6 +270,91 @@ describe("createLazyClient", () => {
     const api = createTestClient<NestedApi>({ fetch: fetchMock });
     const got = await api.users.byId({ userId: 7 });
     expect(got).toEqual({ userId: 7, fullName: "Ada" });
+  });
+
+  it("preserves opaque request-body subtrees verbatim", async () => {
+    const fetchMock = makeFetch(
+      () =>
+        new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    );
+    const api = createTestClient<NestedApi>({ fetch: fetchMock });
+
+    await api.versions.create({
+      body: {
+        changeNote: "init",
+        // `definition` is declared opaque — its keys must survive the trip
+        // through camelToSnakeDeep without being mangled.
+        definition: {
+          trigger_type: "transaction-created",
+          actions: { add_score: 25, create_alert: { severity: "high" } },
+        },
+      },
+    });
+
+    const [, init] = fetchMock.mock.calls[0]!;
+    expect(JSON.parse(init?.body as string)).toEqual({
+      change_note: "init",
+      definition: {
+        trigger_type: "transaction-created",
+        actions: { add_score: 25, create_alert: { severity: "high" } },
+      },
+    });
+  });
+
+  it("preserves opaque response subtrees verbatim", async () => {
+    const fetchMock = makeFetch(
+      () =>
+        new Response(
+          JSON.stringify({
+            id: "v1",
+            change_note: "init",
+            definition: {
+              trigger_type: "transaction-created",
+              actions: { add_score: 25, create_alert: { severity: "high" } },
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+    );
+    const api = createTestClient<NestedApi>({ fetch: fetchMock });
+    const got = await api.versions.create({ body: { definition: {} } });
+
+    expect(got).toEqual({
+      id: "v1",
+      changeNote: "init",
+      definition: {
+        // Top-level Struct fields are still camelCased, but the opaque payload
+        // under `definition` keeps its original snake_case keys.
+        trigger_type: "transaction-created",
+        actions: { add_score: 25, create_alert: { severity: "high" } },
+      },
+    });
+  });
+
+  it("applies opaque paths under `data.` for Result envelopes", async () => {
+    const fetchMock = makeFetch(
+      () =>
+        new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              id: "v1",
+              definition: { trigger_type: "transaction-created" },
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+    );
+    const api = createTestClient<NestedApi>({ fetch: fetchMock });
+    const got = (await api.versions.byId({ id: "v1" })) as {
+      ok: boolean;
+      data: { id: string; definition: Record<string, unknown> };
+    };
+    expect(got.ok).toBe(true);
+    expect(got.data.definition).toEqual({ trigger_type: "transaction-created" });
   });
 
   it("passes Result envelopes through (also camelCasing nested error fields)", async () => {

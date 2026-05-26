@@ -431,6 +431,81 @@ def test_unconstrained_object_type_is_not_never_record() -> None:
     assert "Record<string, never>" not in out
 
 
+def test_opaque_dict_fields_emit_route_descriptor_paths() -> None:
+    """`dict[str, Any]` fields surface as opaqueRequestPaths / opaqueResponsePaths.
+
+    The TS runtime uses these paths to skip snake_case<->camelCase rename
+    inside user-defined JSON payloads, so opaque content round-trips with
+    its original keys intact.
+    """
+
+    class Version(msgspec.Struct):
+        id: str
+        definition: dict[str, Any]
+
+    class VersionBody(msgspec.Struct):
+        definition: dict[str, Any]
+        change_note: str | None = None
+
+    app = App()
+
+    @app.post("/versions")
+    async def create_version(body: VersionBody) -> Version:
+        return Version(id="1", definition=body.definition)
+
+    out = _render_text(app)
+    assert (
+        '"opaqueRequestPaths": ["definition"]' in out or 'opaqueRequestPaths: ["definition"]' in out
+    )
+    assert (
+        '"opaqueResponsePaths": ["definition"]' in out
+        or 'opaqueResponsePaths: ["definition"]' in out
+    )
+
+
+def test_opaque_paths_prefixed_with_data_for_result_routes() -> None:
+    """When the route declares `@raises`, the response is wrapped in
+    `Result<T, E>` (`{ok: true, data: T}`) — opaque paths must be prefixed
+    with `data.` so they apply to the success-envelope payload at runtime.
+    """
+
+    class NotFound(Exception):
+        pass
+
+    class Version(msgspec.Struct):
+        id: str
+        definition: dict[str, Any]
+
+    app = App()
+
+    @app.get("/versions/{id}")
+    @raises(NotFound)
+    async def show_version(id: str) -> Version:
+        return Version(id=id, definition={})
+
+    out = _render_text(app)
+    assert 'opaqueResponsePaths: ["data.definition"]' in out
+
+
+def test_opaque_paths_descend_into_arrays() -> None:
+    """Opaque-path collection should walk through array `items` so that
+    `list[dict[str, Any]]` surfaces the opaque element type. Arrays inherit
+    the parent path — opaque paths are property-relative, not index-relative.
+    """
+
+    class Outer(msgspec.Struct):
+        rows: list[dict[str, Any]]
+
+    app = App()
+
+    @app.get("/outer")
+    async def get_outer() -> Outer:
+        return Outer(rows=[])
+
+    out = _render_text(app)
+    assert 'opaqueResponsePaths: ["rows"]' in out
+
+
 def test_struct_docstring_not_emitted_as_jsdoc() -> None:
     class Thing(msgspec.Struct):
         """A thing that lives in the system."""

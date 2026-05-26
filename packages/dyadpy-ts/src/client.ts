@@ -134,11 +134,17 @@ function buildRequest(
   }
 
   let body: BodyInit | undefined;
+  const requestOpaque = buildOpaqueTree(route.opaqueRequestPaths);
   if (bodyMode === "json") {
     headers["content-type"] ??= "application/json";
     const payload = Object.keys(bodyEmbed).length > 0 ? bodyEmbed : bodyWhole;
     // camelCase → snake_case so the Python server sees the keys it expects.
-    body = payload === undefined ? undefined : JSON.stringify(camelToSnakeDeep(payload));
+    // Subtrees flagged opaque in the route descriptor pass through untouched
+    // so user-defined JSON (e.g. `definition: dict[str, Any]`) keeps its keys.
+    body =
+      payload === undefined
+        ? undefined
+        : JSON.stringify(camelToSnakeDeepGuarded(payload, requestOpaque));
   } else if (bodyMode === "multipart" && multipart != null) {
     // Let fetch set the multipart boundary; we must NOT pin content-type.
     delete headers["content-type"];
@@ -149,7 +155,7 @@ function buildRequest(
   } else if (bodyMode === "form") {
     headers["content-type"] ??= "application/x-www-form-urlencoded";
     const form = new URLSearchParams();
-    const payload = camelToSnakeDeep(bodyWhole) as Record<string, unknown>;
+    const payload = camelToSnakeDeepGuarded(bodyWhole, requestOpaque) as Record<string, unknown>;
     for (const [k, val] of Object.entries(payload)) {
       if (val === undefined || val === null) continue;
       if (Array.isArray(val)) for (const item of val) form.append(k, String(item));
@@ -201,7 +207,8 @@ async function unaryCall(
   // generic `HTTP NNN: …` so consumers can branch on `error.kind`.
   if (ct.includes("application/json")) {
     const raw = (await res.json()) as unknown;
-    const value = snakeToCamelDeep(raw) as unknown;
+    const responseOpaque = buildOpaqueTree(route.opaqueResponsePaths);
+    const value = snakeToCamelDeepGuarded(raw, responseOpaque) as unknown;
     if (isTypedErrorEnvelope(value)) {
       if (route.result) return value as Result<unknown, unknown>;
       const errPayload = (value as { error: Record<string, unknown> }).error;
@@ -256,6 +263,7 @@ async function* streamCall(
   let retryMs = 1000; // default backoff if server doesn't send `retry:`
   const startedAt = Date.now();
   const maxResumeWindowMs = 5 * 60 * 1000; // give up after 5 min of failed reconnects
+  const streamOpaque = buildOpaqueTree(route.opaqueResponsePaths);
 
   while (true) {
     if (opts.signal?.aborted) return;
@@ -293,7 +301,7 @@ async function* streamCall(
           });
         }
         if (ev.data === "") continue;
-        yield snakeToCamelDeep(safeJsonParse(ev.data));
+        yield snakeToCamelDeepGuarded(safeJsonParse(ev.data), streamOpaque);
       }
     } catch (error) {
       if (opts.signal?.aborted) return;
@@ -398,5 +406,70 @@ function camelToSnakeDeep(value: unknown): unknown {
   if (!isPlainObject(value)) return value;
   const out: Record<string, unknown> = {};
   for (const k of Object.keys(value)) out[camelToSnake(k)] = camelToSnakeDeep(value[k]);
+  return out;
+}
+
+// Opaque-subtree-aware variants. Routes declare opaque paths in their
+// descriptor when they accept or return user-defined JSON payloads
+// (`dict[str, Any]` / `JsonObject`). At each declared path we skip the
+// recursive rename so the payload's own keys survive the round trip.
+
+interface OpaqueTree {
+  opaque?: boolean;
+  children?: Record<string, OpaqueTree>;
+}
+
+function buildOpaqueTree(paths: ReadonlyArray<string> | undefined): OpaqueTree | null {
+  if (!paths || paths.length === 0) return null;
+  const root: OpaqueTree = {};
+  for (const path of paths) {
+    let node = root;
+    for (const seg of path.split(".")) {
+      if (!seg) continue;
+      const children = node.children ?? (node.children = {});
+      node = children[seg] ?? (children[seg] = {});
+    }
+    node.opaque = true;
+  }
+  return root;
+}
+
+function snakeToCamelDeepGuarded(value: unknown, tree: OpaqueTree | null): unknown {
+  if (tree === null) return snakeToCamelDeep(value);
+  // Arrays inherit the parent path — opaque paths are property-relative.
+  if (Array.isArray(value)) return value.map((v) => snakeToCamelDeepGuarded(v, tree));
+  if (!isPlainObject(value)) return value;
+  const out: Record<string, unknown> = {};
+  for (const k of Object.keys(value)) {
+    const renamed = snakeToCamel(k);
+    const child = tree.children?.[renamed];
+    if (child?.opaque) {
+      // Preserve the opaque subtree verbatim — don't even rename inside it.
+      out[renamed] = value[k];
+    } else if (child) {
+      out[renamed] = snakeToCamelDeepGuarded(value[k], child);
+    } else {
+      out[renamed] = snakeToCamelDeep(value[k]);
+    }
+  }
+  return out;
+}
+
+function camelToSnakeDeepGuarded(value: unknown, tree: OpaqueTree | null): unknown {
+  if (tree === null) return camelToSnakeDeep(value);
+  if (Array.isArray(value)) return value.map((v) => camelToSnakeDeepGuarded(v, tree));
+  if (!isPlainObject(value)) return value;
+  const out: Record<string, unknown> = {};
+  for (const k of Object.keys(value)) {
+    const child = tree.children?.[k];
+    const renamed = camelToSnake(k);
+    if (child?.opaque) {
+      out[renamed] = value[k];
+    } else if (child) {
+      out[renamed] = camelToSnakeDeepGuarded(value[k], child);
+    } else {
+      out[renamed] = camelToSnakeDeep(value[k]);
+    }
+  }
   return out;
 }
