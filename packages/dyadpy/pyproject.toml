@@ -165,7 +165,10 @@ filterwarnings = ["error"]
 [tool.coverage.run]
 branch = true
 source = ["dyadpy"]
-omit = ["src/dyadpy/cli.py"]
+# cli.py and dev.py are thin shells over Typer / watchfiles + uvicorn — they
+# only light up when an actual server runs, which belongs in integration tests
+# rather than the unit suite that gates the coverage floor.
+omit = ["src/dyadpy/cli.py", "src/dyadpy/dev.py"]
 
 [tool.coverage.report]
 exclude_lines = ["pragma: no cover", "if TYPE_CHECKING:", "raise NotImplementedError", "\\.\\.\\."]

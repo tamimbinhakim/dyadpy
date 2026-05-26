@@ -523,6 +523,94 @@ def test_opaque_paths_prefixed_with_data_for_result_routes() -> None:
     assert 'opaqueResponsePaths: ["data.definition"]' in out
 
 
+def test_opaque_paths_skip_routes_with_no_response_body() -> None:
+    """Routes returning `None` skip opaque-path collection on the response side."""
+
+    app = App()
+
+    @app.post("/jobs/{id}/cancel")
+    async def cancel_job(id: str) -> None:
+        return None
+
+    out = _render_text(app)
+    assert "opaqueResponsePaths" not in out
+    assert "opaqueRequestPaths" not in out
+
+
+def test_opaque_paths_skip_routes_with_no_body_params() -> None:
+    """Routes whose only inputs are path/query/header params skip request-side collection."""
+
+    app = App()
+
+    @app.get("/items/{id}")
+    async def show_item(id: str, q: str = "") -> dict[str, str]:
+        return {"id": id, "q": q}
+
+    out = _render_text(app)
+    assert "opaqueRequestPaths" not in out
+
+
+def test_opaque_paths_handle_optional_union_fields() -> None:
+    """`X | None` becomes a `oneOf`/`anyOf` (or `type: [...]`) branch — the walker
+    must descend each branch without crashing on the non-object branches.
+    """
+
+    class Outer(msgspec.Struct):
+        title: str | None = None
+        config: dict[str, Any] = {}
+
+    app = App()
+
+    @app.get("/items")
+    async def list_items() -> Outer:
+        return Outer()
+
+    out = _render_text(app)
+    assert 'opaqueResponsePaths: ["config"]' in out
+
+
+def test_opaque_walk_terminates_on_recursive_components() -> None:
+    """A self-referencing component must not loop the cycle guard forever.
+
+    Exercises `_walk_for_opaque` directly because msgspec can't resolve a
+    forward-ref inside a function-scoped struct (this is purely about the
+    walker's cycle handling, not about codegen).
+    """
+    from dyadpy.codegen import _walk_for_opaque
+
+    components: dict[str, dict[str, Any]] = {
+        "Node": {
+            "type": "object",
+            "properties": {
+                "id": {"type": "string"},
+                "child": {"$ref": "#/components/schemas/Node"},
+                "meta": {"type": "object"},
+            },
+        }
+    }
+    out: list[str] = []
+    _walk_for_opaque(
+        {"$ref": "#/components/schemas/Node"},
+        components,
+        prefix="root",
+        out=out,
+        seen=set(),
+    )
+    # Walker terminates and records the opaque `meta` field exactly once.
+    assert out == ["root.meta"]
+
+
+def test_opaque_walk_ignores_missing_refs_and_non_dict_schemas() -> None:
+    """Dangling `$ref` and non-dict schema inputs must short-circuit cleanly."""
+    from dyadpy.codegen import _walk_for_opaque
+
+    out: list[str] = []
+    _walk_for_opaque({"$ref": "#/components/schemas/Missing"}, {}, prefix="x", out=out, seen=set())
+    _walk_for_opaque(None, {}, prefix="x", out=out, seen=set())  # type: ignore[arg-type]
+    _walk_for_opaque("not-a-dict", {}, prefix="x", out=out, seen=set())  # type: ignore[arg-type]
+    assert out == []
+
+
 def test_opaque_paths_descend_into_arrays() -> None:
     """Opaque-path collection should walk through array `items` so that
     `list[dict[str, Any]]` surfaces the opaque element type. Arrays inherit
