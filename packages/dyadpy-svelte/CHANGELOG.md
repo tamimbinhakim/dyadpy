@@ -8,6 +8,13 @@ this file. Managed automatically by
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1-alpha.0](https://github.com/tamimbinhakim/dyadpy/compare/dyadpy-svelte-v0.1.0-alpha.0...dyadpy-svelte-v0.1.1-alpha.0) (2026-05-26)
+
+
+### Features
+
+* add smart reload and lazy client chunks ([bc602b6](https://github.com/tamimbinhakim/dyadpy/commit/bc602b680a9835abf689a883e8a4169d826c6866))
+
 ## [Unreleased]
 
 ### Added
