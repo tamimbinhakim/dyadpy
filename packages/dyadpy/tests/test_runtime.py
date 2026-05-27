@@ -219,6 +219,7 @@ async def test_streaming_endpoint_emits_sse(client_factory):
 async def test_unhandled_stream_exception_emits_error_frame_and_logs_concisely(
     client_factory,
     caplog,
+    capsys,
 ):
     class Token(msgspec.Struct, tag_field="kind", tag="token"):
         text: str
@@ -240,10 +241,16 @@ async def test_unhandled_stream_exception_emits_error_frame_and_logs_concisely(
         'event: error\ndata: {"kind":"InternalError","message":"internal server error","request_id":"req-stream"}'
         in r.text
     )
+    # Logger record: short, structured, easy to grep.
     logged = caplog.text
     assert "RuntimeError: stream died" in logged
-    assert "request: GET /chat" in logged
     assert "Traceback (most recent call last)" not in logged
+    # Rich panel: comprehensive operator-facing detail rendered to stderr.
+    panel = capsys.readouterr().err
+    assert "RuntimeError" in panel
+    assert "stream died" in panel
+    assert "GET /chat" in panel
+    assert "req-stream" in panel
 
 
 async def test_depends_resolution(client_factory):
@@ -305,7 +312,7 @@ async def test_missing_required_query_param_422(client_factory):
     assert r.status_code == 422
 
 
-async def test_unhandled_exception_returns_500_and_logs_concisely(client_factory, caplog):
+async def test_unhandled_exception_returns_500_and_logs_concisely(client_factory, caplog, capsys):
     app = App()
 
     @app.get("/boom")
@@ -319,12 +326,17 @@ async def test_unhandled_exception_returns_500_and_logs_concisely(client_factory
 
     assert r.status_code == 500
     assert r.json() == {"detail": "internal server error", "request_id": "req-500"}
+    # Logger record: short, structured, easy to grep.
     logged = caplog.text
     assert "RuntimeError: not declared" in logged
-    assert "request: GET /boom" in logged
-    assert "request_id: req-500" in logged
-    assert "test_runtime.py" in logged
     assert "Traceback (most recent call last)" not in logged
+    # Rich panel: full operator detail rendered to stderr.
+    panel = capsys.readouterr().err
+    assert "RuntimeError" in panel
+    assert "not declared" in panel
+    assert "GET /boom" in panel
+    assert "req-500" in panel
+    assert "test_runtime.py" in panel
 
 
 async def test_unhandled_exception_can_use_custom_exception_handler(client_factory, caplog):
