@@ -1,6 +1,6 @@
 {
   "name": "@dyadpy/svelte",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Deprecated shim. @dyadpy/svelte has been renamed to @causewayjs/svelte — install that instead.",
   "keywords": [
     "deprecated",

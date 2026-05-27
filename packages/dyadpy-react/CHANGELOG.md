@@ -8,6 +8,13 @@ this file. Managed automatically by
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1](https://github.com/tamimbinhakim/dyadpy/compare/dyadpy-react-v0.3.0...dyadpy-react-v0.3.1) (2026-05-27)
+
+
+### Bug Fixes
+
+* **shim:** point [@dyadpy](https://github.com/dyadpy) packages at [@causewayjs](https://github.com/causewayjs) scope ([d37dad1](https://github.com/tamimbinhakim/dyadpy/commit/d37dad1c065ced7e135de565ba161e6460c2b511))
+
 ## [0.3.0](https://github.com/tamimbinhakim/dyadpy/compare/dyadpy-react-v0.2.0...dyadpy-react-v0.3.0) (2026-05-27)
 
 

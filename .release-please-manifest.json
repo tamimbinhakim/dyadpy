@@ -1,7 +1,7 @@
 {
   "packages/dyadpy": "0.3.0",
-  "packages/dyadpy-ts": "0.3.0",
-  "packages/dyadpy-react": "0.3.0",
-  "packages/dyadpy-svelte": "0.3.0",
-  "packages/dyadpy-solid": "0.3.0"
+  "packages/dyadpy-ts": "0.3.1",
+  "packages/dyadpy-react": "0.3.1",
+  "packages/dyadpy-svelte": "0.3.1",
+  "packages/dyadpy-solid": "0.3.1"
 }
