@@ -1,7 +1,7 @@
 {
   "name": "@dyadpy/solid",
   "version": "0.3.0",
-  "description": "Deprecated shim. @dyadpy/solid has been renamed to causeway-solid — install that instead.",
+  "description": "Deprecated shim. @dyadpy/solid has been renamed to @causewayjs/solid — install that instead.",
   "keywords": [
     "deprecated",
     "causeway"
@@ -52,7 +52,7 @@
     "clean": "rimraf dist .turbo"
   },
   "dependencies": {
-    "causeway-solid": "^0.2.0"
+    "@causewayjs/solid": "^0.1.1-alpha.0"
   },
   "devDependencies": {
     "@types/node": "25.7.0",

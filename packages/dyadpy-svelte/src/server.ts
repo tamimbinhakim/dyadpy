@@ -1,3 +1,3 @@
-// Deprecated shim — re-exports from `causeway-svelte/server`.
-export { loadQuery } from "causeway-svelte/server";
-export type { SvelteRequestLike } from "causeway-svelte/server";
+// Deprecated shim — re-exports from `@causewayjs/svelte/server`.
+export { loadQuery } from "@causewayjs/svelte/server";
+export type { SvelteRequestLike } from "@causewayjs/svelte/server";

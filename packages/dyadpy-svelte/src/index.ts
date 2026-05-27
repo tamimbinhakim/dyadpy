@@ -1,11 +1,11 @@
-// Deprecated shim. `@dyadpy/svelte` has been renamed to `causeway-svelte`.
+// Deprecated shim. `@dyadpy/svelte` has been renamed to `@causewayjs/svelte`.
 // `createDyadpyStores` was renamed to `createCausewayStores`; `DyadpyStores`
 // to `CausewayStores`. Old names re-exported as aliases.
 
 export {
   createCausewayStores,
   createCausewayStores as createDyadpyStores,
-} from "causeway-svelte";
+} from "@causewayjs/svelte";
 
 export type {
   ArgsOf,
@@ -20,4 +20,4 @@ export type {
   StreamKeys,
   SubscriptionStoreValue,
   UnaryKeys,
-} from "causeway-svelte";
+} from "@causewayjs/svelte";

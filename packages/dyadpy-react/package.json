@@ -1,7 +1,7 @@
 {
   "name": "@dyadpy/react",
   "version": "0.3.0",
-  "description": "Deprecated shim. @dyadpy/react has been renamed to causeway-react — install that instead.",
+  "description": "Deprecated shim. @dyadpy/react has been renamed to @causewayjs/react — install that instead.",
   "keywords": [
     "deprecated",
     "causeway"
@@ -52,7 +52,7 @@
     "clean": "rimraf dist .turbo"
   },
   "dependencies": {
-    "causeway-react": "^0.2.0"
+    "@causewayjs/react": "^0.2.5-alpha.0"
   },
   "devDependencies": {
     "@types/node": "25.7.0",

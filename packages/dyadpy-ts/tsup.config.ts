@@ -10,5 +10,5 @@ export default defineConfig({
   treeshake: true,
   minify: false,
   target: "es2022",
-  external: ["causeway-ts"],
+  external: ["@causewayjs/ts"],
 });

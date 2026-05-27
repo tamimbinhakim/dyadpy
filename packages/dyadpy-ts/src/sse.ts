@@ -1,3 +1,3 @@
-// Deprecated shim — re-exports from `causeway-ts/sse`.
-export { parseSSE } from "causeway-ts/sse";
-export type { SSEEvent } from "causeway-ts/sse";
+// Deprecated shim — re-exports from `@causewayjs/ts/sse`.
+export { parseSSE } from "@causewayjs/ts/sse";
+export type { SSEEvent } from "@causewayjs/ts/sse";

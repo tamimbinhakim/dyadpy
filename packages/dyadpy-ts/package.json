@@ -1,7 +1,7 @@
 {
   "name": "@dyadpy/ts",
   "version": "0.3.0",
-  "description": "Deprecated shim. @dyadpy/ts has been renamed to causeway-ts — install that instead.",
+  "description": "Deprecated shim. @dyadpy/ts has been renamed to @causewayjs/ts — install that instead.",
   "keywords": [
     "deprecated",
     "causeway"
@@ -52,7 +52,7 @@
     "clean": "rimraf dist .turbo"
   },
   "dependencies": {
-    "causeway-ts": "^0.2.0"
+    "@causewayjs/ts": "^0.1.6-alpha.0"
   },
   "devDependencies": {
     "@types/node": "25.7.0",

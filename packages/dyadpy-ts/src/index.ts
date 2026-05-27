@@ -1,6 +1,6 @@
-// Deprecated shim. `@dyadpy/ts` has been renamed to `causeway-ts`.
+// Deprecated shim. `@dyadpy/ts` has been renamed to `@causewayjs/ts`.
 //
-// This package re-exports everything from `causeway-ts` so existing imports
+// This package re-exports everything from `@causewayjs/ts` so existing imports
 // keep resolving while you migrate. It will be removed in a future
 // causeway release.
 
@@ -15,7 +15,7 @@ export {
   forwardHeaders,
   parseSSE,
   unwrapResult,
-} from "causeway-ts";
+} from "@causewayjs/ts";
 
 export type {
   CallOptions,
@@ -32,4 +32,4 @@ export type {
   Result,
   RouteDescriptor,
   RouteMeta,
-} from "causeway-ts";
+} from "@causewayjs/ts";

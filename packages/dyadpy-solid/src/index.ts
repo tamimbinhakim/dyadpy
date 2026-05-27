@@ -1,11 +1,11 @@
-// Deprecated shim. `@dyadpy/solid` has been renamed to `causeway-solid`.
+// Deprecated shim. `@dyadpy/solid` has been renamed to `@causewayjs/solid`.
 // `createDyadpyResources` was renamed to `createCausewayResources`;
 // `DyadpyResources` to `CausewayResources`. Old names re-exported as aliases.
 
 export {
   createCausewayResources,
   createCausewayResources as createDyadpyResources,
-} from "causeway-solid";
+} from "@causewayjs/solid";
 
 export type {
   ArgsOf,
@@ -19,4 +19,4 @@ export type {
   StreamKeys,
   SubscriptionResource,
   UnaryKeys,
-} from "causeway-solid";
+} from "@causewayjs/solid";

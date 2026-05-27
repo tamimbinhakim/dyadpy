@@ -1,12 +1,8 @@
-// Deprecated shim. `@dyadpy/react` has been renamed to `causeway-react`.
+// Deprecated shim. `@dyadpy/react` has been renamed to `@causewayjs/react`.
 // Original symbols are re-exported plus the `Dyadpy*` aliases for the
 // renamed `UseCausewaySubscription*` types.
 
-export {
-  buildNamespaceTree,
-  computeNamespace,
-  createReactClient,
-} from "causeway-react";
+export { buildNamespaceTree, computeNamespace, createReactClient } from "@causewayjs/react";
 
 export type {
   NamespaceEntry,
@@ -18,4 +14,4 @@ export type {
   UseCausewaySubscriptionResult,
   UseCausewaySubscriptionOptions as UseDyadpySubscriptionOptions,
   UseCausewaySubscriptionResult as UseDyadpySubscriptionResult,
-} from "causeway-react";
+} from "@causewayjs/react";
