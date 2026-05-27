@@ -55,7 +55,7 @@
     "causeway-ts": "^0.2.0"
   },
   "devDependencies": {
-    "@types/node": "25.7.0",
+    "@types/node": "25.9.1",
     "tsup": "8.5.1"
   },
   "engines": {
