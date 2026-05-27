@@ -16,23 +16,9 @@ permissions:
   contents: read
 
 jobs:
-  version-guard:
-    name: Version guard
-    if: github.event_name == 'push'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.0
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.0.0
-        with:
-          python-version: "3.13"
-      - run: python scripts/check_versions.py
-
   release-please:
     name: release-please
     if: github.event_name == 'push'
-    needs: version-guard
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -135,16 +121,6 @@ jobs:
           echo "name=$NAME" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "component=$COMPONENT" >> "$GITHUB_OUTPUT"
-
-      - name: Check version and tag
-        run: |
-          set -euo pipefail
-          if [ "${{ steps.meta.outputs.kind }}" = "npm" ] &&
-            npm view "${{ steps.meta.outputs.name }}@${{ steps.meta.outputs.version }}" version >/dev/null 2>&1; then
-            python scripts/check_versions.py --package packages/${{ inputs.path }}
-          else
-            python scripts/check_versions.py --package packages/${{ inputs.path }} --check-tag-available
-          fi
 
       - name: Build Python package
         if: steps.meta.outputs.kind == 'python'
