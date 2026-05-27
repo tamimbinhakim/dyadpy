@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "dyadpy"
-version = "0.2.0"
+version = "0.3.0"
 description = "Deprecated shim. dyadpy has been merged into causeway as causeway._runtime — install 'causeway' instead."
 readme = "README.md"
 license = { text = "MIT" }
