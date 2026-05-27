@@ -1,6 +1,6 @@
 {
   "name": "@dyadpy/ts",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Deprecated shim. @dyadpy/ts has been renamed to @causewayjs/ts — install that instead.",
   "keywords": [
     "deprecated",

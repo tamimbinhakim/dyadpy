@@ -1,6 +1,6 @@
 {
   "name": "@dyadpy/solid",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Deprecated shim. @dyadpy/solid has been renamed to @causewayjs/solid — install that instead.",
   "keywords": [
     "deprecated",
