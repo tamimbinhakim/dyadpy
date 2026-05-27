@@ -1,49 +1,84 @@
-"""Dyadpy — a type-safe RPC bridge between Python and TypeScript.
+"""Deprecated. ``dyadpy`` is now ``causeway`` — install causeway instead.
 
-The function signature is the contract. See
-https://github.com/tamimbinhakim/dyadpy for full docs.
+This package is a compatibility shim that re-exports every public symbol
+from ``causeway`` (and aliases every legacy submodule under ``dyadpy.*``)
+so existing imports keep working while you migrate:
 
-``dyadpy.tasks`` is loaded lazily via PEP 562 — it drags ``asyncio``'s
-unix-event-loop internals that only matter when you actually queue a
-background job. Bidi is cheap to import eagerly (only ``msgspec`` at
-runtime; ``starlette.websockets`` is ``TYPE_CHECKING``-only) so it stays
-on the default path.
+    pip uninstall dyadpy
+    pip install 'causeway>=0.5'
+    # then s/from dyadpy/from causeway/ across the codebase
+
+This shim will be removed in causeway 0.6.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+import sys
+import warnings
+from typing import Any
 
-from dyadpy.app import App
-from dyadpy.bidi import BidiChannel, bidi
-from dyadpy.context import Context, Depends, after
-from dyadpy.errors import raises
-from dyadpy.params import Form
-from dyadpy.streaming import SsePayload, stream
+warnings.warn(
+    "The 'dyadpy' package has been merged into 'causeway' as causeway._runtime. "
+    "Replace `from dyadpy import X` with `from causeway import X`. "
+    "This shim will be removed in causeway 0.6.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
-if TYPE_CHECKING:  # pragma: no cover - re-export shape only
-    from dyadpy.tasks import (
-        InMemoryBackend,
-        TaskBackend,
-        TaskState,
-        mount_task_routes,
-    )
+# Re-export the public surface from causeway's top-level package.
+from causeway import (  # noqa: E402
+    App,
+    BidiChannel,
+    Bytes,
+    Context,
+    Depends,
+    Form,
+    SsePayload,
+    after,
+    bidi,
+    raises,
+    stream,
+)
 
-# Raw-body sentinel: annotate a handler param or return with ``Bytes`` to
-# skip the JSON envelope entirely. Identical to the ``bytes`` builtin; the
-# alias is exported for documentation and explicit-intent reasons.
-Bytes = bytes
+# Alias every legacy ``dyadpy.<sub>`` submodule to the corresponding
+# ``causeway._runtime.<sub>`` (and ``dyadpy._traceback`` to the top-level
+# ``causeway._traceback``) so ``import dyadpy.context`` keeps resolving.
+import importlib  # noqa: E402
+
+_SUBMODULES = (
+    "_idents",
+    "_pydantic",
+    "app",
+    "bidi",
+    "codegen",
+    "context",
+    "diff",
+    "errors",
+    "ir",
+    "openapi",
+    "otel",
+    "params",
+    "polyglot",
+    "runtime",
+    "streaming",
+    "tasks",
+)
+for _sub in _SUBMODULES:
+    sys.modules[f"dyadpy.{_sub}"] = importlib.import_module(f"causeway._runtime.{_sub}")
+sys.modules["dyadpy._traceback"] = importlib.import_module("causeway._traceback")
+del _sub
+del importlib
 
 _LAZY_TASKS = {"InMemoryBackend", "TaskBackend", "TaskState", "mount_task_routes"}
 
+__version__ = "0.2.0"
+
 
 def __getattr__(name: str) -> Any:
-    # ``importlib.import_module`` (not ``from dyadpy import ...``) so we don't
-    # recurse into this very ``__getattr__`` looking up the submodule.
     if name in _LAZY_TASKS:
         import importlib
 
-        return getattr(importlib.import_module("dyadpy.tasks"), name)
+        return getattr(importlib.import_module("causeway._runtime.tasks"), name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
@@ -58,11 +93,10 @@ __all__ = [
     "SsePayload",
     "TaskBackend",
     "TaskState",
+    "__version__",
     "after",
     "bidi",
     "mount_task_routes",
     "raises",
     "stream",
 ]
-
-__version__ = "0.1.12"

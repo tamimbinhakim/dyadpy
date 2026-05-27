@@ -1,8 +1,22 @@
-export { createDyadpyResources } from "./resources.js";
+// Deprecated shim. `@dyadpy/solid` has been renamed to `causeway-solid`.
+// `createDyadpyResources` was renamed to `createCausewayResources`;
+// `DyadpyResources` to `CausewayResources`. Old names re-exported as aliases.
+
+export {
+  createCausewayResources,
+  createCausewayResources as createDyadpyResources,
+} from "causeway-solid";
+
 export type {
-  DyadpyResources,
-  QueryResource,
+  ArgsOf,
+  CausewayResources,
+  CausewayResources as DyadpyResources,
+  DataOf,
+  ErrorOf,
   MutationResource,
+  QueryResource,
+  StreamItemOf,
+  StreamKeys,
   SubscriptionResource,
-} from "./resources.js";
-export type { ArgsOf, DataOf, ErrorOf, StreamItemOf, StreamKeys, UnaryKeys } from "./types.js";
+  UnaryKeys,
+} from "causeway-solid";

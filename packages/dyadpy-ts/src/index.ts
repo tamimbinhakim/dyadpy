@@ -1,14 +1,29 @@
-// `@dyadpy/ts` — the tiny zero-dep runtime generated Dyadpy clients import.
-// Static typing lives in the generated `.d.ts`; this file only does plumbing.
+// Deprecated shim. `@dyadpy/ts` has been renamed to `causeway-ts`.
+//
+// This package re-exports everything from `causeway-ts` so existing imports
+// keep resolving while you migrate. It will be removed in a future
+// causeway release.
 
-export { createLazyClient } from "./client.js";
-export { parseSSE } from "./sse.js";
-export { DEFAULT_FORWARDED_HEADERS, forwardHeaders } from "./ssr.js";
-export { DyadpyError, unwrapResult } from "./types.js";
-export type { HeaderRecord, HeaderRecordValue, HeaderSource, HeadersLike } from "./ssr.js";
+// `DyadpyError` was renamed to `CausewayError`. Both names are re-exported
+// so `import { DyadpyError }` keeps working.
+
+export {
+  CausewayError,
+  CausewayError as DyadpyError,
+  createLazyClient,
+  DEFAULT_FORWARDED_HEADERS,
+  forwardHeaders,
+  parseSSE,
+  unwrapResult,
+} from "causeway-ts";
+
 export type {
   CallOptions,
   Err,
+  HeaderRecord,
+  HeaderRecordValue,
+  HeaderSource,
+  HeadersLike,
   HttpMethod,
   LazyClientConfig,
   Ok,
@@ -17,4 +32,4 @@ export type {
   Result,
   RouteDescriptor,
   RouteMeta,
-} from "./types.js";
+} from "causeway-ts";

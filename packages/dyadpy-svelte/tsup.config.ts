@@ -4,7 +4,7 @@ export default defineConfig({
   clean: true,
   dts: true,
   entry: ["src/index.ts", "src/server.ts"],
-  external: ["svelte", "svelte/store", "@dyadpy/ts"],
+  external: ["svelte", "svelte/store", "causeway-svelte"],
   format: ["esm", "cjs"],
   minify: false,
   sourcemap: true,

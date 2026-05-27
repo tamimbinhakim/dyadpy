@@ -2,10 +2,10 @@
   "name": "dyadpy-monorepo",
   "version": "0.0.0",
   "private": true,
-  "description": "A type-safe RPC bridge between Python and TypeScript. The function signature is the contract.",
-  "homepage": "https://github.com/tamimbinhakim/dyadpy#readme",
+  "description": "Deprecated. dyadpy has been merged into causeway — see https://github.com/tamimbinhakim/causeway.",
+  "homepage": "https://github.com/tamimbinhakim/causeway#readme",
   "bugs": {
-    "url": "https://github.com/tamimbinhakim/dyadpy/issues"
+    "url": "https://github.com/tamimbinhakim/causeway/issues"
   },
   "license": "MIT",
   "author": "Tamim Bin Hakim (@tamimbinhakim)",
@@ -13,13 +13,9 @@
     "type": "git",
     "url": "git+https://github.com/tamimbinhakim/dyadpy.git"
   },
-  "workspaces": [
-    "packages/*",
-    "examples/*/frontend"
-  ],
+  "workspaces": ["packages/*"],
   "scripts": {
     "build": "pnpm -r --filter=./packages/* run build",
-    "test": "pnpm -r --filter=./packages/* run test",
     "typecheck": "pnpm -r --filter=./packages/* run typecheck",
     "lint": "pnpm lint:ts && pnpm lint:py",
     "lint:ts": "oxlint .",
@@ -48,17 +44,12 @@
     "typescript": "6.0.3"
   },
   "lint-staged": {
-    "*.{ts,tsx,js,jsx,mjs,cjs}": [
-      "oxlint --fix",
-      "oxfmt --ignore-path .oxfmtignore"
-    ],
+    "*.{ts,tsx,js,jsx,mjs,cjs}": ["oxlint --fix", "oxfmt --ignore-path .oxfmtignore"],
     "packages/dyadpy/**/*.py": [
       "uv run --directory packages/dyadpy ruff check --fix",
       "uv run --directory packages/dyadpy ruff format"
     ],
-    "*.{md,json,yaml,yml}": [
-      "prettier --write"
-    ]
+    "*.{md,json,yaml,yml}": ["prettier --write"]
   },
   "engines": {
     "node": ">=22",

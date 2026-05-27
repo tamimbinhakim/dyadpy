@@ -1,228 +1,91 @@
-<div align="center">
+# Dyadpy → Causeway
 
-# Dyadpy
+**Dyadpy has been merged into [Causeway](https://github.com/tamimbinhakim/causeway).**
 
-**Write a Python handler. Call it from TypeScript with full types. No DTOs, no OpenAPI codegen, no broken types after a refactor.**
+The type-safe Python↔TypeScript RPC substrate that lived here is now part of
+the Causeway framework as `causeway._runtime` (Python) and the `causeway-ts`
+/ `causeway-react` / `causeway-solid` / `causeway-svelte` packages (JS).
+Nothing technical was removed — only the brand boundary.
 
-[![CI](https://github.com/tamimbinhakim/dyadpy/actions/workflows/ci.yml/badge.svg)](https://github.com/tamimbinhakim/dyadpy/actions/workflows/ci.yml)
-[![PyPI](https://img.shields.io/pypi/v/dyadpy.svg)](https://pypi.org/project/dyadpy/)
-[![npm](https://img.shields.io/npm/v/@dyadpy/ts.svg)](https://www.npmjs.com/package/@dyadpy/ts)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+## Why
 
-[**Quickstart**](./docs/getting-started.md) · [**Docs**](./docs) · [**Examples**](./examples)
+Two parallel package names (`dyadpy` + `causeway`, `@dyadpy/react` + future
+`causeway-react`) made every error message, every CHANGELOG, every install
+twice as confusing as it needed to be. End users want one name. The
+substrate stays as architecture inside causeway; it stops being a separate
+publish.
 
-</div>
+## Migration
 
-## What you get
+### Python
 
-```python
-# server/app.py
-from dyadpy import App
-import msgspec
-
-app = App()
-
-class User(msgspec.Struct):
-    id: int
-    email: str
-    name: str
-
-@app.get("/users/{user_id}")
-async def get_user(user_id: int) -> User:
-    return await db.get_user(user_id)
+```sh
+pip uninstall dyadpy
+pip install 'causeway>=0.5'
 ```
 
-```ts
-// frontend/anywhere.tsx
-import { api } from "@/lib/dyadpy/client";
-
-const user = await api.users.byId({ userId: 1 });
-//    ^? User — full type, autocomplete, refactor-safe
-```
-
-That's the whole loop. `dyadpy dev` hot-swaps the app after successful Python
-edits and rewrites the generated client directory, so the TS side is always in
-sync without a process restart on every save.
-
-## Why you'd use it
-
-- **Zero DTO duplication.** Your Python function signature _is_ the API contract. No `class CreatePostRequest(BaseModel)` mirrored in three files.
-- **Nested route calls that read like resources.** `api.users.byId(...)` — not `createPostPostsPost`.
-- **Typed streaming out of the box.** `stream[T]` becomes `AsyncIterable<T>` on the client, with auto-reconnect on drop.
-- **Typed errors as discriminated unions.** `@raises(NotFound, Forbidden)` → `Result<T, NotFound | Forbidden>`. The compiler forces you to handle each case.
-- **Tiny entry, lazy route chunks.** Importing `api` loads a small `client/index.ts` plus route metadata; full descriptors live in route chunks and load only when a route is called.
-- **Framework-agnostic on both ends.** Python web framework: dyadpy (Starlette under the hood). Frontend: anything that runs TS — Next.js, Vite, SvelteKit, Astro, Solid Start.
-- **First-class hooks for the big three.** `@dyadpy/react` (TanStack Query), `@dyadpy/svelte` (stores), `@dyadpy/solid` (resources). Server-side prefetch helpers ship with each.
-- **Fast.** msgspec on the hot path — 2–30× faster than Pydantic v2 on decode/encode. Pydantic still ships as a first-class plugin (`dyadpy[pydantic]`).
-
-## Day-to-day
-
-**Rename a Python field — TS lights up in red.**
+Then in your code:
 
 ```diff
- class User(msgspec.Struct):
-     id: int
--    email: str
-+    contact_email: str
+- from dyadpy import App, Context, Depends, get, post, stream, raises
++ from causeway import App, Context, Depends, get, post, stream, raises
 ```
 
-```ts
-user.email;
-//   ~~~~~ Property 'email' does not exist on type 'User'.
-//         Did you mean 'contactEmail'?
+Every public name from `dyadpy` is re-exported at the top level of
+`causeway`. If you need to reach into substrate internals, they live under
+`causeway._runtime.*` (e.g. `causeway._runtime.ir`,
+`causeway._runtime.codegen`, `causeway._runtime.polyglot`).
+
+### CLI
+
+The standalone `dyadpy` CLI has been folded into `causeway`:
+
+| dyadpy           | causeway                       |
+| ---------------- | ------------------------------ |
+| `dyadpy codegen` | `causeway codegen`             |
+| `dyadpy diff`    | `causeway diff`                |
+| `dyadpy ir`      | `causeway ir`                  |
+| `dyadpy openapi` | `causeway openapi`             |
+| `dyadpy swift`   | `causeway swift`               |
+| `dyadpy kotlin`  | `causeway kotlin`              |
+| `dyadpy dev`     | `causeway dev` (richer reload) |
+
+### JavaScript / TypeScript
+
+```diff
+- import { createLazyClient } from "@dyadpy/ts";
++ import { createLazyClient } from "causeway-ts";
+
+- import { createReactClient } from "@dyadpy/react";
++ import { createReactClient } from "causeway-react";
+
+- import { createDyadpyResources } from "@dyadpy/solid";
++ import { createCausewayResources } from "causeway-solid";
+
+- import { createDyadpyStores } from "@dyadpy/svelte";
++ import { createCausewayStores } from "causeway-svelte";
 ```
 
-Save Python. Your editor tells you exactly which call sites to fix. No grep, no broken prod.
+The `DyadpyError` class is now `CausewayError`. `createDyadpyResources` /
+`createDyadpyStores` are `createCausewayResources` / `createCausewayStores`.
+`UseDyadpySubscription*` types are `UseCausewaySubscription*`.
 
-**Add an endpoint — autocomplete picks it up instantly.**
+### Codegen output
 
-```python
-@app.post("/orders")
-async def create_order(order: NewOrder) -> Order: ...
-```
+Run `causeway codegen` again — the new generator emits `from "causeway-ts"`
+instead of `from "@dyadpy/ts"`. Commit the regenerated client.
 
-```ts
-api.orders.cr|
-//         ^ create ← appears the moment you save Python
-```
+## Compatibility shims
 
-**Errors as discriminated unions — forget a case, get a compile error.**
+`dyadpy@0.2`, `@dyadpy/ts@0.2`, `@dyadpy/react@0.2`, `@dyadpy/solid@0.2`,
+and `@dyadpy/svelte@0.2` are thin re-export packages that depend on
+`causeway` / `causeway-{ts,react,solid,svelte}` and emit a deprecation
+warning on import. They exist so existing installs don't break the day
+you upgrade. **They will be removed in causeway 0.6.**
 
-```python
-@raises(NotFound, Forbidden)
-async def get_user(user_id: int) -> User: ...
-```
-
-```ts
-const result = await api.users.byId({ userId: 1 });
-if (!result.ok) {
-  switch (result.error.kind) {
-    case "NotFound":
-      /* ... */ break;
-    case "Forbidden":
-      /* ... */ break;
-    // add a third @raises later? the compiler flags this switch as non-exhaustive.
-  }
-}
-```
-
-**Typed streaming with no extra plumbing.**
-
-```python
-@app.get("/build/{id}/events")
-async def watch_build(id: int) -> stream[BuildLog]: ...
-```
-
-```ts
-for await (const log of api.build.events.list({ id: 42 })) {
-  log.level; // "info" | "warn" | "error" — autocomplete works
-}
-```
-
-**Generated code you can inspect.** The generated `client/` directory keeps the public entry small (`index.ts`), declarations separate (`types.d.ts`), and runtime descriptors split under `routes/`. You can still diff and grep it, but bundlers no longer transform the whole API graph for every importer.
-
-**No codegen step in your head.** No `pnpm gen`, no `buf gen`, no `npm run codegen` to remember. `dyadpy dev` watches Python, keeps the last good app serving on failed reloads, and writes the client atomically. If it's in your editor, it's in the client.
-
-Full primitives in [`docs/reference.md`](./docs/reference.md).
-
-## Install
-
-> Dyadpy is pre-1.0. Pin exact versions in production apps when you need
-> repeatable installs.
-
-```bash
-# Server
-uv add 'dyadpy==0.1.0a0'
-
-# Client runtime (any frontend)
-pnpm add @dyadpy/ts
-
-# Framework hooks (optional)
-pnpm add @dyadpy/react   # or @dyadpy/svelte / @dyadpy/solid
-```
-
-## Run
-
-```bash
-dyadpy dev server.app:app --out ../frontend/src/lib/dyadpy/client
-```
-
-What that does:
-
-1. Starts your ASGI app on `http://127.0.0.1:8000`.
-2. Watches `*.py`. On save, regenerates the `client/` directory atomically into your frontend.
-3. Your TS toolchain hot-reloads on the new file.
-
-That's it. Walkthrough in [docs/getting-started.md](./docs/getting-started.md).
-
-## How it compares
-
-|                     | **Dyadpy**                              | FastAPI + openapi-typescript | tRPC          | Connect-RPC              |
-| ------------------- | --------------------------------------- | ---------------------------- | ------------- | ------------------------ |
-| Backend lang        | **Python**                              | Python                       | TypeScript    | Polyglot                 |
-| DTO duplication     | **None**                                | Yes                          | None          | Yes (`.proto`)           |
-| Codegen step        | **Invisible (`dyadpy dev`)**            | Manual rerun                 | None          | `buf gen`                |
-| Streaming type-safe | **Yes (typed SSE)**                     | Manual                       | Subscriptions | Yes                      |
-| Typed errors → TS   | **Discriminated union**                 | HTTP codes                   | `TRPCError`   | Yes                      |
-| Best for            | **Python backend + modern TS frontend** | External clients             | TS monorepo   | Cross-team microservices |
-
-## SSR
-
-Server-rendered first paint with no waterfall. Each framework has a prefetch helper in its `/server` subpath:
-
-```tsx
-// Next.js App Router
-import { prefetchQuery } from "@dyadpy/react/server";
-await prefetchQuery(queryClient, api, "getUser", { userId: 1 });
-```
-
-```ts
-// SvelteKit
-import { loadQuery } from "@dyadpy/svelte/server";
-export const load = (event) => ({
-  me: await loadQuery(api, "me", undefined, event),
-});
-```
-
-```tsx
-// Solid Start
-import { serverQuery } from "@dyadpy/solid/server";
-return serverQuery(api, "me", undefined, event.request);
-```
-
-Auth/cookies/tracing headers forward automatically via [`forwardHeaders`](./docs/ssr.md). Full guide in [`docs/ssr.md`](./docs/ssr.md).
-
-## Packages
-
-| Package                                            | What it is                                                                                  | Status |
-| -------------------------------------------------- | ------------------------------------------------------------------------------------------- | ------ |
-| [`dyadpy`](./packages/dyadpy) (PyPI)               | Python framework, CLI, codegen.                                                             | v0.1   |
-| [`@dyadpy/ts`](./packages/dyadpy-ts) (npm)         | ~3 KB framework-agnostic TS runtime. Works with any frontend.                               | v0.1   |
-| [`@dyadpy/react`](./packages/dyadpy-react) (npm)   | React hooks (`useQuery`, `useMutation`, `useSubscription`) on TanStack Query + SSR helpers. | v0.1   |
-| [`@dyadpy/svelte`](./packages/dyadpy-svelte) (npm) | Svelte 5 store bindings + SSR helpers.                                                      | v0.1   |
-| [`@dyadpy/solid`](./packages/dyadpy-solid) (npm)   | SolidJS resource bindings + SSR helpers.                                                    | v0.1   |
-
-## Stability
-
-Pre-1.0. Pin exact versions. After 1.0:
-
-- **Patch + minor never break.** Wire format / IR is additive-only.
-- **Major bumps follow a deprecation cycle** — one full minor of warnings before removal.
-- **Generated client output is part of the surface.** A minor bump won't break a working client.
-
-Details: [`docs/semver.md`](./docs/semver.md), [`docs/ir-stability.md`](./docs/ir-stability.md), [`docs/lts.md`](./docs/lts.md).
-
-## What it doesn't do
-
-- **No auth implementation.** Wire `Depends(current_user)` to your provider. Recipes in [`docs/auth.md`](./docs/auth.md).
-- **No LLM-shaped types in core.** LLM tokens are typed SSE events — use `stream[T]`. Bring your own OpenAI/Anthropic/LangChain code.
-- **No GraphQL.** Different mental model. Strawberry exists.
-- **No WebSockets by default.** SSE covers most server-push cases. WS is opt-in via `bidi[Send, Recv]` (roadmap).
-
-## Contributing
-
-Issues that start with "I tried to do X and got confused" are the best kind. Read [CONTRIBUTING.md](./CONTRIBUTING.md), be kind ([Code of Conduct](./CODE_OF_CONDUCT.md)).
+The shims are the last release from this repo. Future development happens
+in [causeway](https://github.com/tamimbinhakim/causeway).
 
 ## License
 
-[MIT](./LICENSE).
+MIT — unchanged.
